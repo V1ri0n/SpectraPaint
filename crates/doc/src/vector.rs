@@ -313,6 +313,12 @@ pub enum LiveShape {
         to: [f64; 2],
         weight: f64,
     },
+    /// Any outline with its sharp corners rounded: `base` is the outline as it was drawn and
+    /// `radii` the radius of each sharp corner in path order (one number = the same for all).
+    Rounded {
+        base: Path,
+        radii: Vec<f64>,
+    },
 }
 
 /// A shape layer: a filled and/or stroked path.

@@ -56,6 +56,18 @@ fn hex(c: [f32; 4]) -> String {
     format!("#{:02x}{:02x}{:02x}", c.r(), c.g(), c.b())
 }
 
+/// The colours a new shape is drawn in, `(fill, outline)`. PhotoCraft fills with the primary colour
+/// and outlines with the secondary; Paint.NET outlines with the primary, and fills with the
+/// secondary when there is an outline too.
+pub(crate) fn paint_colors(app: &PhotocraftApp) -> ([f32; 4], [f32; 4]) {
+    let (fg, bg) = (app.session.tools.foreground, app.session.tools.background);
+    if !crate::pdn::active() {
+        return (fg, bg);
+    }
+    let o = &app.ui.tool_options;
+    if o.shape_fill && o.stroke_width > 0.0 { (bg, fg) } else { (fg, fg) }
+}
+
 fn stroke_param(app: &PhotocraftApp) -> Value {
     let o = &app.ui.tool_options;
     if o.stroke_width <= 0.0 {
@@ -63,7 +75,7 @@ fn stroke_param(app: &PhotocraftApp) -> Value {
     }
     let mut p = o.shape_stroke.params();
     p["width"] = json!(o.stroke_width);
-    p["color"] = json!(app.session.tools.background);
+    p["color"] = json!(paint_colors(app).1);
     p
 }
 
@@ -95,7 +107,7 @@ fn shape_geometry(o: &ToolOptions, tool: Tool, start: [f64; 2], end: [f64; 2], m
             return None;
         }
         match tool {
-            Tool::Rectangle if o.corner_radius > 0.0 => json!({"kind": "roundedRect", "rect": rect, "radii": vec![o.corner_radius; 4]}),
+            Tool::Rectangle if o.radii().iter().any(|r| *r > 0.0) => json!({"kind": "roundedRect", "rect": rect, "radii": o.radii()}),
             Tool::Rectangle | Tool::CustomShape => json!({"kind": "rect", "rect": rect}),
             Tool::EllipseShape => json!({"kind": "ellipse", "rect": rect}),
             Tool::Triangle => json!({"kind": "polygon", "rect": rect, "sides": 3}),
@@ -122,7 +134,7 @@ pub fn finish_shape(app: &mut PhotocraftApp, tool: Tool, start: [f64; 2], end: [
 }
 
 fn fill_param(app: &PhotocraftApp) -> Value {
-    if app.ui.tool_options.shape_fill { json!(app.session.tools.foreground) } else { Value::Null }
+    if app.ui.tool_options.shape_fill { json!(paint_colors(app).0) } else { Value::Null }
 }
 
 /// Create a shape layer from `shape.create` geometry with the options bar's fill and stroke: the
@@ -147,8 +159,8 @@ fn shape_preview(app: &PhotocraftApp, tool: Tool, start: [f64; 2], end: [f64; 2]
     };
     Some(photocraft_doc::ShapeLayer {
         path,
-        fill: o.shape_fill.then(|| solid_paint(app.session.tools.foreground)),
-        stroke: (o.stroke_width > 0.0).then(|| o.shape_stroke.stroke(o.stroke_width, solid_paint(app.session.tools.background))),
+        fill: o.shape_fill.then(|| solid_paint(paint_colors(app).0)),
+        stroke: (o.stroke_width > 0.0).then(|| o.shape_stroke.stroke(o.stroke_width, solid_paint(paint_colors(app).1))),
         ..Default::default()
     })
 }
@@ -897,7 +909,9 @@ pub fn draw_overlay(app: &PhotocraftApp, painter: &egui::Painter, xf: &ViewXform
                 draw_path(wp, tool == Tool::PathSelection);
             }
             let st = app.session.active();
-            if let Some(l) = st.and_then(|s| s.active_layer.and_then(|id| s.doc.layer(id)))
+            // While the shape is being transformed the transform box draws it; its old outline would stay behind.
+            if app.ui.transform.is_none()
+                && let Some(l) = st.and_then(|s| s.active_layer.and_then(|id| s.doc.layer(id)))
                 && let LayerContent::Shape(sh) = &l.content
             {
                 draw_path(&sh.path, tool == Tool::PathSelection);
@@ -978,6 +992,9 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
         ))
     {
         return false;
+    }
+    if crate::pdn::active() && is_shape_tool(tool) {
+        return crate::pdn::shapes::options(app, ui, tool);
     }
     let t = Tokens::get(ui.ctx());
     let lbl = |ui: &mut egui::Ui, s: &str| {
@@ -1441,7 +1458,8 @@ pub fn shape_properties(app: &mut PhotocraftApp, ui: &mut egui::Ui, id: photocra
                     }
                 });
             }
-            photocraft_doc::vector::LiveShape::Line { .. } => {}
+            // Rounded outlines are edited from the corner menu of the options bar.
+            photocraft_doc::vector::LiveShape::Line { .. } | photocraft_doc::vector::LiveShape::Rounded { .. } => {}
         }
         ui.vertical(|ui| match live {
             photocraft_doc::vector::LiveShape::Rect { radii, .. } => {

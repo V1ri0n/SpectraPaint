@@ -106,6 +106,10 @@ pub fn intercept(app: &mut PhotocraftApp, tool: Tool, x: f64, y: f64, pressure: 
         return false;
     }
     let Some((kind, layer)) = needed(app) else { return false };
+    // Paint.NET asks nothing: a shape or text painted over simply becomes part of the layer.
+    if crate::pdn::active() && matches!(kind, Kind::Shape | Kind::Type) && app.run(kind.command(), json!({"layer": layer.0})).is_ok() {
+        return false;
+    }
     if !app.ui.dialogs.iter().any(|d| owns(&d.fields)) {
         open(app, kind, layer, tool, [x, y, f64::from(pressure)]);
     }

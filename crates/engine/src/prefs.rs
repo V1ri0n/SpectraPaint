@@ -55,10 +55,10 @@ choice!(TypeUnit { Points = "points", Pixels = "pixels", Millimeters = "mm" } de
 choice!(PointSize { PostScript = "postScript", Traditional = "traditional" } default PostScript);
 choice!(Interpolation { BicubicAutomatic = "bicubicAutomatic", Nearest = "nearestNeighbor", Bilinear = "bilinear", Bicubic = "bicubic", BicubicSmoother = "bicubicSmoother", BicubicSharper = "bicubicSharper", PreserveDetails = "preserveDetails" } default BicubicAutomatic);
 choice!(ColorPicker { Adobe = "adobe", System = "system" } default Adobe);
-choice!(Theme { Pro = "pro", ProMedium = "proMedium", ProLightGray = "proLightGray", ProLight = "proLight", Studio = "studio", StudioLight = "studioLight", Classic = "classic", SolarizedDark = "solarizedDark", Adwaita = "adwaita", AdwaitaDark = "adwaitaDark", BreezeLight = "breezeLight", BreezeDark = "breezeDark", SoftDark = "softDark", SoftLight = "softLight" } default ProMedium);
+choice!(Theme { Pro = "pro", ProMedium = "proMedium", ProLightGray = "proLightGray", ProLight = "proLight", Studio = "studio", StudioLight = "studioLight", Classic = "classic", SolarizedDark = "solarizedDark", Adwaita = "adwaita", AdwaitaDark = "adwaitaDark", BreezeLight = "breezeLight", BreezeDark = "breezeDark", SoftDark = "softDark", SoftLight = "softLight", PaintNet = "paintNet", PaintNetLight = "paintNetLight" } default PaintNet);
 choice!(AppearanceMode { Auto = "auto", Dark = "dark", Light = "light" } default Dark);
-choice!(DarkTheme { Pro = "pro", ProMedium = "proMedium", Studio = "studio", SolarizedDark = "solarizedDark", AdwaitaDark = "adwaitaDark", BreezeDark = "breezeDark", SoftDark = "softDark" } default ProMedium);
-choice!(LightTheme { StudioLight = "studioLight", ProLightGray = "proLightGray", ProLight = "proLight", Classic = "classic", Adwaita = "adwaita", BreezeLight = "breezeLight", SoftLight = "softLight" } default StudioLight);
+choice!(DarkTheme { Pro = "pro", ProMedium = "proMedium", Studio = "studio", SolarizedDark = "solarizedDark", AdwaitaDark = "adwaitaDark", BreezeDark = "breezeDark", SoftDark = "softDark", PaintNet = "paintNet" } default PaintNet);
+choice!(LightTheme { StudioLight = "studioLight", ProLightGray = "proLightGray", ProLight = "proLight", Classic = "classic", Adwaita = "adwaita", BreezeLight = "breezeLight", SoftLight = "softLight", PaintNetLight = "paintNetLight" } default PaintNetLight);
 choice!(CanvasColor { Default = "default", Black = "black", DarkGray = "darkGray", MediumGray = "mediumGray", LightGray = "lightGray", Custom = "custom" } default Default);
 choice!(CanvasBorder { DropShadow = "dropShadow", Line = "line", None = "none" } default DropShadow);
 choice!(UiScale { Auto = "auto", P75 = "75", P80 = "80", P85 = "85", P90 = "90", P95 = "95", P100 = "100", P125 = "125", P150 = "150", P175 = "175", P200 = "200", P250 = "250", P300 = "300" } default Auto);
@@ -236,7 +236,7 @@ impl Default for General {
             animated_zoom: true,
             zoom_resizes_windows: false,
             use_legacy_free_transform: false,
-            auto_show_home_screen: true,
+            auto_show_home_screen: false,
         }
     }
 }
@@ -290,10 +290,10 @@ pub struct Interface {
 impl Default for Interface {
     fn default() -> Self {
         Self {
-            theme: Theme::ProMedium,
+            theme: Theme::PaintNet,
             appearance_mode: AppearanceMode::Dark,
-            dark_theme: DarkTheme::ProMedium,
-            light_theme: LightTheme::StudioLight,
+            dark_theme: DarkTheme::PaintNet,
+            light_theme: LightTheme::PaintNetLight,
             favorite_themes: Vec::new(),
             canvas_color: CanvasColor::Default,
             canvas_custom_color: "#282828".into(),
@@ -380,7 +380,7 @@ impl Default for Tools {
     fn default() -> Self {
         Self {
             show_tooltips: true,
-            use_shift_key_for_tool_switch: true,
+            use_shift_key_for_tool_switch: false,
             zoom_clicked_point_to_center: false,
             enable_flick_panning: true,
             vary_round_brush_hardness_on_hud: true,
@@ -1354,9 +1354,63 @@ impl Preferences {
         match self.shortcuts.get(id) {
             Some(s) if s.is_empty() => None,
             Some(s) => Some(s.as_str()),
-            None => default,
+            None => pdn_default(id, default),
         }
     }
+}
+
+/// Paint.NET's key bindings, where they differ from Photoshop's (the defaults of this build).
+/// Tool letters are separate (`Tool::key` in the UI crate).
+pub const PDN_SHORTCUTS: &[(&str, &str)] = &[
+    // File and Edit
+    ("edit.redo", "Cmd+Y"),
+    ("edit.clear", "Delete"),
+    ("edit.fillForeground", "Backspace"),
+    ("file.newFromClipboard", "Cmd+Alt+V"),
+    ("select.inverse", "Cmd+I"),
+    ("select.deselect", "Cmd+D"),
+    // View
+    ("view.fitOnScreen", "Cmd+B"),
+    ("view.actualPixels", "Cmd+0"),
+    ("view.rulers", "Cmd+Alt+R"),
+    // Image
+    ("image.imageSize", "Cmd+R"),
+    ("image.canvasSize", "Cmd+Shift+R"),
+    ("image.crop", "Cmd+Shift+X"),
+    ("image.imageRotation.90cw", "Cmd+H"),
+    ("image.imageRotation.90ccw", "Cmd+G"),
+    ("image.imageRotation.180", "Cmd+J"),
+    ("layer.flattenImage", "Cmd+Shift+F"),
+    // Layers
+    ("layer.new.layer", "Cmd+Shift+N"),
+    ("layer.duplicate", "Cmd+Shift+D"),
+    ("layer.delete", "Cmd+Shift+Delete"),
+    ("layer.mergeDown", "Cmd+M"),
+    // Adjustments and effects
+    ("image.autoTone", "Cmd+Shift+L"),
+    ("image.adjustments.blackWhite", "Cmd+Shift+G"),
+    ("image.adjustments.curves", "Cmd+Shift+M"),
+    ("image.adjustments.hueSaturation", "Cmd+Shift+U"),
+    ("image.adjustments.invert", "Cmd+Shift+I"),
+    ("image.adjustments.levels", "Cmd+L"),
+    ("image.adjustments.posterize", "Cmd+Shift+P"),
+    ("filter.lastFilter", "Cmd+F"),
+    // Windows
+    ("window.toggle.toolbar", "F5"),
+    ("window.toggle.history", "F6"),
+    ("window.toggle.layers", "F7"),
+    ("window.toggle.color", "F8"),
+];
+
+/// A command's key in this build: Paint.NET's when it has one; a Photoshop default that a
+/// Paint.NET key now owns is dropped, so no two commands share a key.
+fn pdn_default<'a>(id: &str, default: Option<&'a str>) -> Option<&'a str> {
+    if let Some((_, key)) = PDN_SHORTCUTS.iter().find(|(c, _)| *c == id) {
+        return Some(key);
+    }
+    let d = default?;
+    let taken = PDN_SHORTCUTS.iter().any(|(_, key)| normalize_shortcut(key).is_some_and(|k| normalize_shortcut(d).as_deref() == Some(k.as_str())));
+    if taken { None } else { Some(d) }
 }
 
 // ------------------------------------------------------------------ shortcuts
@@ -1541,10 +1595,10 @@ impl Session {
             && let Some(theme) = interface.get("theme").and_then(Value::as_str).and_then(Theme::parse)
         {
             let (mode, slot) = match theme {
-                Theme::Pro | Theme::ProMedium | Theme::Studio | Theme::SolarizedDark | Theme::AdwaitaDark | Theme::BreezeDark | Theme::SoftDark => {
+                Theme::Pro | Theme::ProMedium | Theme::Studio | Theme::SolarizedDark | Theme::AdwaitaDark | Theme::BreezeDark | Theme::SoftDark | Theme::PaintNet => {
                     ("dark", "darkTheme")
                 }
-                Theme::StudioLight | Theme::ProLightGray | Theme::ProLight | Theme::Classic | Theme::Adwaita | Theme::BreezeLight | Theme::SoftLight => {
+                Theme::StudioLight | Theme::ProLightGray | Theme::ProLight | Theme::Classic | Theme::Adwaita | Theme::BreezeLight | Theme::SoftLight | Theme::PaintNetLight => {
                     ("light", "lightTheme")
                 }
             };
@@ -1675,6 +1729,14 @@ impl Session {
                 }
                 Theme::SoftLight => {
                     next.interface.light_theme = LightTheme::SoftLight;
+                    next.interface.appearance_mode = AppearanceMode::Light;
+                }
+                Theme::PaintNet => {
+                    next.interface.dark_theme = DarkTheme::PaintNet;
+                    next.interface.appearance_mode = AppearanceMode::Dark;
+                }
+                Theme::PaintNetLight => {
+                    next.interface.light_theme = LightTheme::PaintNetLight;
                     next.interface.appearance_mode = AppearanceMode::Light;
                 }
             }

@@ -915,8 +915,9 @@ fn options_bar_height(pro: bool, narrow: bool) -> f32 {
 pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     let narrow = app.session.prefs().workspace.narrow_options_bar();
+    let bar_h = if t.kind.is_paint_net() { crate::pdn::u(ui.ctx(), 40.0) } else { options_bar_height(t.pro, narrow) };
     egui::Panel::top("options_bar")
-        .exact_size(options_bar_height(t.pro, narrow))
+        .exact_size(bar_h)
         .frame(egui::Frame::NONE.fill(t.chrome).inner_margin(egui::Margin::symmetric(10, 0)))
         .show(ui, |ui| {
             ui.style_mut().spacing.scroll = egui::style::ScrollStyle { bar_width: 4.0, ..egui::style::ScrollStyle::floating() };
@@ -925,11 +926,20 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             // Include its gutter in the container layout, including right-aligned actions.
             egui::Frame::NONE.inner_margin(egui::Margin { right: 2, ..Default::default() }).show(ui, |ui| {
             crate::direction::horizontal_centered(ui, |ui| {
-                if t.pro {
+                let pdn = t.kind.is_paint_net();
+                if t.pro && !pdn {
                     crate::chrome_ui::home_button(app, ui);
                     widgets::vline(ui, 22.0);
                 }
+                if pdn {
+                    let ru = crate::i18n::current().code() == "ru";
+                    ui.label(RichText::new(if ru { "Инструмент:" } else { "Tool:" }).color(t.text));
+                }
                 let tool_icon = icons::button(ui, icons::tool_icon(app.ui.tool), if t.pro { 26.0 } else { 28.0 }, !t.pro, tl!(app.ui.tool.label()));
+                // Paint.NET's tool button lists every tool; Photoshop's has Reset Tool on a right click.
+                if pdn {
+                    egui::Popup::menu(&tool_icon).close_behavior(egui::PopupCloseBehavior::CloseOnClick).show(|ui| crate::pdn::windows::tool_menu(app, ui));
+                }
                 // Photoshop: right-click the tool icon for Reset Tool / Reset All Tools (#2825).
                 let mut reset = None;
                 tool_icon.context_menu(|ui| {
@@ -953,7 +963,9 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 }
                 widgets::vline(ui, 22.0);
                 if app.ui.transform.is_some() {
-                    crate::transform_tool::options_bar(app, ui);
+                    if !crate::pdn::finalize::auto_options(app, ui) {
+                        crate::transform_tool::options_bar(app, ui);
+                    }
                     return;
                 }
                 if crate::distort_ui::options_bar(app, ui) {
@@ -992,6 +1004,21 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 let mut brush = brush_before.clone();
                 let b = &mut brush;
                 match app.ui.tool {
+                    Tool::Brush | Tool::Eraser | Tool::Pencil if pdn => crate::pdn::options::brush(app.ui.tool, ui, b),
+                    Tool::PaintBucket if pdn => crate::pdn::options::bucket(app, ui),
+                    Tool::Glow => crate::pdn::glow::options(app, ui),
+                    Tool::RectMarquee
+                    | Tool::EllipseMarquee
+                    | Tool::SingleRowMarquee
+                    | Tool::SingleColumnMarquee
+                    | Tool::Lasso
+                    | Tool::PolygonLasso
+                    | Tool::MagneticLasso
+                    | Tool::MagicWand
+                        if pdn =>
+                    {
+                        crate::pdn::options::selection(app, ui)
+                    }
                     Tool::Brush | Tool::Eraser if t.pro => {
                         // A Block-mode Eraser has a fixed size, opacity and flow (Photoshop, #2770).
                         let block = crate::eraser_ui::block_mode(app, app.ui.tool);
@@ -2942,11 +2969,11 @@ fn layer_row(
 
 /// Screen rect and UVs for a layer thumbnail: the document-shaped part of the square cell and of
 /// the letterboxed square texture, so tall and wide documents don't show empty bars.
-fn layer_thumb_fit(cell: Rect, w: u32, h: u32) -> (Rect, Rect) {
+pub(crate) fn layer_thumb_fit(cell: Rect, w: u32, h: u32) -> (Rect, Rect) {
     crate::channels_panel::fit_thumb(cell, w, h)
 }
 
-fn draw_layer_thumb(app: &mut PhotocraftApp, ctx: &egui::Context, ui: &egui::Ui, doc: &photocraft_doc::Document, l: &Layer, rect: Rect, selected: bool) {
+pub(crate) fn draw_layer_thumb(app: &mut PhotocraftApp, ctx: &egui::Context, ui: &egui::Ui, doc: &photocraft_doc::Document, l: &Layer, rect: Rect, selected: bool) {
     let t = Tokens::get(ctx);
     let p = ui.painter();
     match &l.content {

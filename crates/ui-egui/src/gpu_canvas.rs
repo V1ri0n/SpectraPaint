@@ -833,6 +833,9 @@ pub struct Perf {
     pub ui_ms: f64,
     /// Worst UI frame of the last ~second (ms).
     pub ui_max_ms: f64,
+    /// The UI time of the last frame (ms).
+    #[serde(skip)]
+    pub last_ui_ms: f64,
     /// Last canvas refresh: CPU composite (ms).
     pub composite_ms: f64,
     /// Last canvas refresh: conversion + upload (ms).
@@ -891,6 +894,12 @@ pub struct GpuInfo {
 }
 
 impl GpuInfo {
+    /// Whether the window renders on a software rasterizer (WARP, "Microsoft Basic Render Driver"):
+    /// no graphics driver, a virtual machine or a remote session. Drawing is then fill-rate bound.
+    pub fn is_software(&self) -> bool {
+        self.device_type == "cpu"
+    }
+
     /// Fill the adapter fields from `info`.
     pub fn set_adapter(&mut self, info: &wgpu::AdapterInfo) {
         self.adapter = info.name.clone();
@@ -990,6 +999,7 @@ impl Perf {
         self.spans.insert(name, (ms * 100.0).round() / 100.0);
     }
     pub fn frame(&mut self, ms: f64) {
+        self.last_ui_ms = ms;
         self.ui_ms = if self.ui_ms == 0.0 { ms } else { self.ui_ms * 0.9 + ms * 0.1 };
         self.max_decay += 1.0;
         if ms > self.ui_max_ms || self.max_decay > 60.0 {
@@ -2151,6 +2161,18 @@ mod mip_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_cpu_adapter_is_software() {
+        let mut info = GpuInfo::default();
+        assert!(!info.is_software(), "before the window opens nothing is known");
+        for hardware in ["discreteGpu", "integratedGpu", "virtualGpu", "other"] {
+            info.device_type = hardware.into();
+            assert!(!info.is_software(), "{hardware}");
+        }
+        info.device_type = "cpu".into();
+        assert!(info.is_software());
+    }
 
     #[test]
     fn gpu_budget_follows_memory_usage_and_ram() {

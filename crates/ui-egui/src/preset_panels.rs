@@ -290,7 +290,7 @@ pub(crate) fn style_texture(app: &PhotocraftApp, ctx: &egui::Context, st: &photo
     })
 }
 
-fn shape_texture(ctx: &egui::Context, sh: &photocraft_engine::presets::shapes::ShapePreset) -> TextureHandle {
+pub(crate) fn shape_texture(ctx: &egui::Context, sh: &photocraft_engine::presets::shapes::ShapePreset) -> TextureHandle {
     let knots: usize = sh.path.subpaths.iter().map(|s| s.knots.len()).sum();
     cached_texture(ctx, ("shape", sh.name.clone(), knots), || {
         const S: u32 = 64;
@@ -884,7 +884,7 @@ pub fn shapes_panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
 }
 
 fn shape_fill(app: &PhotocraftApp) -> Value {
-    let f = app.session.tools.foreground;
+    let f = crate::vector_ui::paint_colors(app).0;
     let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
     if app.ui.tool_options.shape_fill { json!(format!("#{:02x}{:02x}{:02x}", q(f[0]), q(f[1]), q(f[2]))) } else { Value::Null }
 }

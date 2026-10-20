@@ -120,6 +120,21 @@ pub fn legacy_pinch_to_zoom(events: &mut [Event], now: f64, last: Option<f64>, n
     latest
 }
 
+/// Paint.NET's wheel: a ⌘/Ctrl + wheel notch zooms, which this program does on ⌥/Alt + wheel, so the
+/// event is rewritten to carry Alt instead (after [`fold_legacy_pinch`] took the touchpad pinches out).
+pub fn ctrl_wheel_zooms(events: &mut [Event]) {
+    for e in events.iter_mut() {
+        if let Event::MouseWheel { modifiers, .. } = e
+            && (modifiers.ctrl || modifiers.command)
+            && !modifiers.alt
+        {
+            modifiers.ctrl = false;
+            modifiers.command = false;
+            modifiers.alt = true;
+        }
+    }
+}
+
 fn pinch_id() -> Id {
     Id::new("pc-wheel-legacy-pinch")
 }

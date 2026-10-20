@@ -27,8 +27,7 @@ use std::sync::Arc;
 pub enum ThemeKind {
     /// Photoshop-style Spectrum dark: flat charcoal panels, tab strips, blue accents (darkest brightness).
     Pro,
-    /// Photoshop's default (second) interface brightness: #535353 panels, #282828 canvas (default).
-    #[default]
+    /// Photoshop's default (second) interface brightness: #535353 panels, #282828 canvas.
     ProMedium,
     /// Photoshop's third interface brightness: #B8B8B8 panels (#2661).
     ProLightGray,
@@ -52,10 +51,15 @@ pub enum ThemeKind {
     SoftDark,
     /// A low-contrast light theme: pale violet-grey surfaces, softened dark text and a periwinkle accent.
     SoftLight,
+    /// Paint.NET's dark look: charcoal windows, light-blue caption strips, deep-blue selection (default).
+    #[default]
+    PaintNet,
+    /// Paint.NET's light look: pale grey windows and the same light-blue captions.
+    PaintNetLight,
 }
 
 impl ThemeKind {
-    pub const ALL: [ThemeKind; 14] = [
+    pub const ALL: [ThemeKind; 16] = [
         ThemeKind::Pro,
         ThemeKind::ProMedium,
         ThemeKind::ProLightGray,
@@ -70,6 +74,8 @@ impl ThemeKind {
         ThemeKind::BreezeDark,
         ThemeKind::SoftDark,
         ThemeKind::SoftLight,
+        ThemeKind::PaintNet,
+        ThemeKind::PaintNetLight,
     ];
     pub fn label(self) -> &'static str {
         match self {
@@ -87,6 +93,8 @@ impl ThemeKind {
             ThemeKind::BreezeDark => "Breeze Dark",
             ThemeKind::SoftDark => "Soft Dark",
             ThemeKind::SoftLight => "Soft Light",
+            ThemeKind::PaintNet => "Paint.NET (Dark)",
+            ThemeKind::PaintNetLight => "Paint.NET (Light)",
         }
     }
     /// The canonical name: `ui.set {theme}` accepts it and the Window › Theme commands are
@@ -107,11 +115,20 @@ impl ThemeKind {
             ThemeKind::BreezeDark => "breezeDark",
             ThemeKind::SoftDark => "softDark",
             ThemeKind::SoftLight => "softLight",
+            ThemeKind::PaintNet => "paintNet",
+            ThemeKind::PaintNetLight => "paintNetLight",
         }
     }
     /// Photoshop-grammar layout (tab strips, flat panels): the four Pro brightness levels.
     pub fn is_pro(self) -> bool {
-        matches!(self, ThemeKind::Pro | ThemeKind::ProMedium | ThemeKind::ProLightGray | ThemeKind::ProLight)
+        matches!(
+            self,
+            ThemeKind::Pro | ThemeKind::ProMedium | ThemeKind::ProLightGray | ThemeKind::ProLight | ThemeKind::PaintNet | ThemeKind::PaintNetLight
+        )
+    }
+    /// Paint.NET's window layout (floating Tools / History / Layers / Colors, command bar).
+    pub fn is_paint_net(self) -> bool {
+        matches!(self, ThemeKind::PaintNet | ThemeKind::PaintNetLight)
     }
     pub fn next(self) -> Self {
         let i = Self::ALL.iter().position(|k| *k == self).unwrap_or(0);
@@ -133,6 +150,8 @@ impl ThemeKind {
             "breezedark" | "kdedark" | "plasmadark" => Some(ThemeKind::BreezeDark),
             "softdark" => Some(ThemeKind::SoftDark),
             "softlight" => Some(ThemeKind::SoftLight),
+            "paintnet" | "paintnetdark" | "pdn" | "pdndark" => Some(ThemeKind::PaintNet),
+            "paintnetlight" | "pdnlight" => Some(ThemeKind::PaintNetLight),
             _ => None,
         }
     }
@@ -273,6 +292,70 @@ impl Tokens {
                 shadow: Color32::from_black_alpha(50),
                 tab_strip: Color32::from_rgb(226, 226, 226),
                 row_selected: Color32::from_rgb(204, 204, 204),
+                ..Tokens::for_kind(ThemeKind::Pro)
+            },
+            // Paint.NET 5 (dark): charcoal windows with light-blue caption strips and a deep-blue
+            // selection, square corners, white text.
+            ThemeKind::PaintNet => Tokens {
+                kind,
+                chrome: Color32::from_rgb(41, 41, 41),
+                canvas: Color32::from_rgb(52, 52, 52),
+                canvas_dot: Color32::from_rgb(52, 52, 52),
+                dock: Color32::from_rgb(41, 41, 41),
+                card: Color32::from_rgb(43, 43, 43),
+                card_border: Color32::from_rgb(86, 86, 86),
+                field: Color32::from_rgb(30, 30, 30),
+                field_border: Color32::from_rgb(92, 92, 92),
+                hover: Color32::from_rgb(70, 70, 70),
+                pressed: Color32::from_rgb(88, 88, 88),
+                text: Color32::from_rgb(240, 240, 240),
+                text_dim: Color32::from_rgb(214, 214, 214),
+                text_faint: Color32::from_rgb(152, 152, 152),
+                icon: Color32::from_rgb(228, 228, 228),
+                accent: Color32::from_rgb(122, 176, 224),
+                accent_soft: Color32::from_rgb(16, 86, 150),
+                accent_border: Color32::from_rgb(70, 140, 214),
+                accent_text: Color32::WHITE,
+                separator: Color32::from_rgb(74, 74, 74),
+                primary_bg: Color32::from_rgb(34, 116, 196),
+                radius_sm: 1.0,
+                radius: 2.0,
+                radius_lg: 3.0,
+                tab_strip: Color32::from_rgb(41, 41, 41),
+                row_selected: Color32::from_rgb(14, 80, 140),
+                histogram_bg: Color32::from_rgb(30, 30, 30),
+                ..Tokens::for_kind(ThemeKind::Pro)
+            },
+            // Paint.NET 5 (light).
+            ThemeKind::PaintNetLight => Tokens {
+                kind,
+                chrome: Color32::from_rgb(240, 240, 240),
+                canvas: Color32::from_rgb(171, 171, 171),
+                canvas_dot: Color32::from_rgb(171, 171, 171),
+                dock: Color32::from_rgb(240, 240, 240),
+                card: Color32::from_rgb(245, 245, 245),
+                card_border: Color32::from_rgb(160, 160, 160),
+                field: Color32::WHITE,
+                field_border: Color32::from_rgb(150, 150, 150),
+                hover: Color32::from_rgb(222, 232, 244),
+                pressed: Color32::from_rgb(196, 214, 236),
+                text: Color32::from_rgb(10, 10, 10),
+                text_dim: Color32::from_rgb(40, 40, 40),
+                text_faint: Color32::from_rgb(110, 110, 110),
+                icon: Color32::from_rgb(40, 40, 40),
+                accent: Color32::from_rgb(122, 176, 224),
+                accent_soft: Color32::from_rgb(204, 224, 248),
+                accent_border: Color32::from_rgb(50, 120, 200),
+                accent_text: Color32::from_rgb(8, 70, 150),
+                separator: Color32::from_rgb(200, 200, 200),
+                shadow: Color32::from_black_alpha(60),
+                primary_bg: Color32::from_rgb(34, 116, 196),
+                radius_sm: 1.0,
+                radius: 2.0,
+                radius_lg: 3.0,
+                tab_strip: Color32::from_rgb(228, 228, 228),
+                row_selected: Color32::from_rgb(166, 202, 240),
+                histogram_bg: Color32::WHITE,
                 ..Tokens::for_kind(ThemeKind::Pro)
             },
             ThemeKind::Pro => Tokens {
@@ -818,6 +901,7 @@ impl Tokens {
                 | ThemeKind::AdwaitaDark
                 | ThemeKind::BreezeDark
                 | ThemeKind::SoftDark
+                | ThemeKind::PaintNet
         )
     }
 }
@@ -976,6 +1060,7 @@ pub fn apply(ctx: &egui::Context, kind: ThemeKind) {
     // including when an integration or restored egui state pinned its own theme preference.
     ctx.set_theme(egui::ThemePreference::System);
     let t = Tokens::for_kind(kind);
+    crate::pdn::set_active(kind.is_paint_net());
     ctx.data_mut(|d| d.insert_temp(egui::Id::new("photocraft-theme"), t));
     let mut v = if t.dark() { Visuals::dark() } else { Visuals::light() };
     v.panel_fill = t.chrome;

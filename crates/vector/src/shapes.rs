@@ -127,7 +127,76 @@ pub fn live_path(s: &LiveShape) -> Path {
         LiveShape::Ellipse { rect: [x, y, w, h] } => ellipse(*x, *y, *w, *h),
         LiveShape::Polygon { rect: [x, y, w, h], sides, star_ratio } => polygon(*x, *y, *w, *h, *sides, *star_ratio),
         LiveShape::Line { from, to, weight } => line((from[0], from[1]), (to[0], to[1]), *weight),
+        LiveShape::Rounded { base, radii } => round_corners(base, radii),
     }
+}
+
+fn sharp(k: &Knot) -> bool {
+    let same = |a: Point, b: Point| (a.x - b.x).abs() < 1e-9 && (a.y - b.y).abs() < 1e-9;
+    same(k.in_ctrl, k.anchor) && same(k.out_ctrl, k.anchor)
+}
+
+/// The corners of `path` that can be rounded: sharp knots with a segment on both sides.
+fn rounds(sp: &Subpath, i: usize) -> bool {
+    let n = sp.knots.len();
+    n >= 3 && sharp(&sp.knots[i]) && (sp.closed || (i > 0 && i + 1 < n))
+}
+
+/// How many corners of `path` can be rounded.
+pub fn corner_count(path: &Path) -> usize {
+    path.subpaths.iter().map(|sp| (0..sp.knots.len()).filter(|&i| rounds(sp, i)).count()).sum()
+}
+
+/// `path` with each of its sharp corners rounded by the circular arc of the radius in `radii`
+/// (one number: the same for every corner; else one per corner in path order, 0 = left sharp).
+/// A radius is cut down to what the two edges at the corner leave: half of the shorter one.
+pub fn round_corners(path: &Path, radii: &[f64]) -> Path {
+    let mut out = path.clone();
+    let mut index = 0usize;
+    for (sp, dst) in path.subpaths.iter().zip(out.subpaths.iter_mut()) {
+        let n = sp.knots.len();
+        let mut knots = Vec::with_capacity(n * 2);
+        for i in 0..n {
+            let k = sp.knots[i];
+            if !rounds(sp, i) {
+                knots.push(k);
+                continue;
+            }
+            let r = if radii.len() == 1 { radii[0] } else { radii.get(index).copied().unwrap_or(0.0) };
+            index += 1;
+            let (prev, next) = (&sp.knots[(i + n - 1) % n], &sp.knots[(i + 1) % n]);
+            let p = k.anchor;
+            // The tangent of each neighbouring segment where it leaves the corner.
+            let toward = |from: &Knot, ctrl: Point| {
+                let c = if (ctrl.x - from.anchor.x).abs() > 1e-9 || (ctrl.y - from.anchor.y).abs() > 1e-9 { ctrl } else { from.anchor };
+                (c.x - p.x, c.y - p.y)
+            };
+            let (a, b) = (toward(prev, prev.out_ctrl), toward(next, next.in_ctrl));
+            let (la, lb) = (a.0.hypot(a.1), b.0.hypot(b.1));
+            let (da, db) = ((prev.anchor.x - p.x).hypot(prev.anchor.y - p.y), (next.anchor.x - p.x).hypot(next.anchor.y - p.y));
+            if r <= 0.0 || la < 1e-9 || lb < 1e-9 {
+                knots.push(k);
+                continue;
+            }
+            let (ua, ub) = ((a.0 / la, a.1 / la), (b.0 / lb, b.1 / lb));
+            let theta = (ua.0 * ub.0 + ua.1 * ub.1).clamp(-1.0, 1.0).acos();
+            // Straight on or folded back on itself: nothing to round.
+            if !(0.01..std::f64::consts::PI - 0.01).contains(&theta) {
+                knots.push(k);
+                continue;
+            }
+            let half = (theta / 2.0).tan();
+            let t = (r / half).min(da.min(db) / 2.0);
+            let r_eff = t * half;
+            let h = 4.0 / 3.0 * ((std::f64::consts::PI - theta) / 4.0).tan() * r_eff;
+            let pa = Point::new(p.x + ua.0 * t, p.y + ua.1 * t);
+            let pb = Point::new(p.x + ub.0 * t, p.y + ub.1 * t);
+            knots.push(Knot { anchor: pa, in_ctrl: pa, out_ctrl: Point::new(pa.x - ua.0 * h, pa.y - ua.1 * h), smooth: false });
+            knots.push(Knot { anchor: pb, in_ctrl: Point::new(pb.x - ub.0 * h, pb.y - ub.1 * h), out_ctrl: pb, smooth: false });
+        }
+        dst.knots = knots;
+    }
+    out
 }
 
 #[cfg(test)]
@@ -157,6 +226,20 @@ mod tests {
             let b = rounded_rect(50.0, 40.0, -20.0, -30.0, radii).control_bounds().unwrap();
             assert_eq!(b, want_neg_h, "radii {radii:?}");
         }
+    }
+
+    #[test]
+    fn corners_round_one_by_one_or_all() {
+        let tri = polygon(0.0, 0.0, 100.0, 100.0, 3, 1.0);
+        assert_eq!(corner_count(&tri), 3);
+        assert_eq!(round_corners(&tri, &[10.0]).subpaths[0].knots.len(), 6);
+        assert_eq!(round_corners(&tri, &[10.0, 0.0, 0.0]).subpaths[0].knots.len(), 4);
+        assert_eq!(round_corners(&tri, &[0.0]).subpaths[0].knots.len(), 3);
+        // A rounded square's arc starts on the edge, a radius away from the corner.
+        let sq = rect(0.0, 0.0, 100.0, 100.0);
+        let r = round_corners(&sq, &[20.0]);
+        let first = r.subpaths[0].knots[0].anchor;
+        assert!((first.x - 0.0).abs() < 1e-9 && (first.y - 20.0).abs() < 1e-9, "{first:?}");
     }
 
     #[test]

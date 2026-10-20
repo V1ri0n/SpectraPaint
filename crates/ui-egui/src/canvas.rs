@@ -1836,7 +1836,10 @@ pub(crate) fn arranged_cells(app: &PhotocraftApp, rect: Rect) -> Option<Vec<(usi
 
 fn documents(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     app.drop_canvas_rect = None;
-    app.tab_strip = None;
+    // Paint.NET's tabs live in its menu row (`pdn::menu_row`).
+    if !crate::pdn::active() {
+        app.tab_strip = None;
+    }
     retain_gpu_documents(app);
     crate::transform_tool::track_steps(app, ui.ctx());
     crate::cas_transform::tick(app, ui.ctx());
@@ -1850,10 +1853,10 @@ fn documents(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     }
     if n == 0 && !opening {
         // Auto show the Home Screen is off: an empty workspace, like Photoshop.
-        paint_dots(ui, ui.available_rect_before_wrap(), app.session.prefs().interface.show_canvas_dots);
+        paint_dots(ui, ui.available_rect_before_wrap(), dots_enabled(app));
         return;
     }
-    if !app.ui.view.hides_tabs() || opening {
+    if (!app.ui.view.hides_tabs() || opening) && !crate::pdn::active() {
         // Flat Spectrum tabs sit directly against the canvas. The parent's default vertical
         // item spacing would otherwise leave a visible gap below the tab strip (#2188).
         let spacing = ui.spacing().item_spacing.y;
@@ -1896,6 +1899,15 @@ fn documents(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
 }
 
 /// The tab strip; returns where its document tabs are.
+/// Paint.NET's document tabs, drawn into its menu row: none with no document open.
+pub(crate) fn pdn_tabs(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> Option<TabStrip> {
+    let opening = !app.jobs.opens.is_empty();
+    if (app.session.documents().is_empty() && !opening) || app.ui.view.hides_tabs() {
+        return None;
+    }
+    Some(pro_tabs(app, ui))
+}
+
 fn tabs(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> TabStrip {
     let t = crate::theme::Tokens::get(ui.ctx());
     if t.pro {
@@ -2261,17 +2273,23 @@ fn pro_tabs(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> TabStrip {
     let mut drag_over = None;
     let mac = ui.ctx().os() == egui::os::OperatingSystem::Mac;
     let large_tabs = app.session.prefs().workspace.large_tabs;
-    let font = egui::FontId::proportional(if large_tabs { 13.0 } else { 11.5 });
-    let tab_h = if large_tabs { 34.0 } else { 26.0 };
+    let pdn = t.kind.is_paint_net();
+    let font = egui::FontId::proportional(if large_tabs || pdn { 13.0 } else { 11.5 });
+    let tab_h = if pdn { 38.0 / ui.ctx().pixels_per_point() } else if large_tabs { 34.0 } else { 26.0 };
+    // Paint.NET's tabs carry a thumbnail of the image before the name.
+    let thumb_w = if pdn { 62.0 / ui.ctx().pixels_per_point() } else { 0.0 };
     let (strip, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), tab_h), Sense::hover());
-    ui.painter().rect_filled(strip, 0.0, t.tab_strip);
+    if !pdn {
+        ui.painter().rect_filled(strip, 0.0, t.tab_strip);
+    }
     // Files opening in the background (#210) are tabs too ("name (Opening… 45%)" with a progress
     // underline); they share the fit's index space, after the documents.
     let opening = crate::jobs_ui::open_tabs(app);
-    let mut titles: Vec<String> = (0..tab_count).map(|i| pro_tab_title(app, i)).collect();
+    let mut titles: Vec<String> =
+        (0..tab_count).map(|i| if pdn { app.session.documents().get(i).map(|st| format!("{}{}", st.doc.name, if st.is_dirty() { " *" } else { "" })).unwrap_or_default() } else { pro_tab_title(app, i) }).collect();
     titles.extend(opening.iter().map(|(_, name, frac)| format!("{name} ({} {:.0}%)", tl!("Opening…"), frac * 100.0)));
     // Every tab's natural width, whether or not it stays on the strip.
-    let natural: Vec<f32> = titles.iter().map(|title| ui.painter().layout_no_wrap(title.clone(), font.clone(), t.text).size().x + DOC_TAB_PAD).collect();
+    let natural: Vec<f32> = titles.iter().map(|title| ui.painter().layout_no_wrap(title.clone(), font.clone(), t.text).size().x + DOC_TAB_PAD + thumb_w).collect();
     let selected = app
         .jobs
         .focus
@@ -2289,10 +2307,13 @@ fn pro_tabs(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> TabStrip {
     let (mut focus_open, mut cancel_open) = (None, None);
     for &(i, r) in placed.iter().filter(|(i, _)| *i < tab_count) {
         let Some(title) = titles.get(i) else { continue };
-        let g = crate::tab_strip::elided(ui, title, font.clone(), t.text, (r.width() - DOC_TAB_PAD).max(1.0));
+        let g = crate::tab_strip::elided(ui, title, font.clone(), t.text, (r.width() - DOC_TAB_PAD - thumb_w).max(1.0));
         let resp = ui.interact(r, ui.id().with(("ptab", i)), Sense::click_and_drag());
         let sel = Some(i) == active;
-        if sel {
+        if sel && pdn {
+            ui.painter().rect_filled(r, 0.0, t.accent_soft);
+            ui.painter().rect_stroke(r.shrink(1.0), 0.0, Stroke::new(1.5, t.accent), egui::StrokeKind::Inside);
+        } else if sel {
             ui.painter().rect_filled(r, 0.0, t.chrome);
         } else if resp.hovered() {
             ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.35));
@@ -2302,7 +2323,22 @@ fn pro_tabs(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> TabStrip {
             ui.painter().rect_stroke(r, 0.0, Stroke::new(1.5, t.accent), egui::StrokeKind::Inside);
         }
         ui.painter().line_segment([r.right_top(), r.right_bottom()], Stroke::new(1.0, t.separator));
-        let (xr, at) = pro_tab_layout(r, g.size().y, mac);
+        let (xr, mut at) = pro_tab_layout(r, g.size().y, mac);
+        if pdn {
+            at.x += thumb_w;
+            let inner = Rect::from_min_size(r.min + egui::vec2(6.0, 4.0), egui::vec2(thumb_w - 8.0, r.height() - 8.0));
+            let ctx = ui.ctx().clone();
+            if let Some(tex) = navigator_texture(app, &ctx, i)
+                && let Some(st) = app.session.documents().get(i)
+            {
+                let (w, h) = (st.doc.size.width.max(1) as f32, st.doc.size.height.max(1) as f32);
+                let s = (inner.width() / w).min(inner.height() / h);
+                let img = Rect::from_center_size(inner.center(), egui::vec2(w * s, h * s));
+                crate::widgets::checker(ui.painter(), img, 4.0);
+                ui.painter().image(tex, img, Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)), Color32::WHITE);
+                ui.painter().rect_stroke(img, 0.0, Stroke::new(1.0, t.card_border), egui::StrokeKind::Outside);
+            }
+        }
         let xresp = ui.interact(xr, ui.id().with(("ptabx", i)), Sense::click());
         // Painted: name the tab and its × for accessibility (and so tests and agents can find them).
         resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, g.text()));
@@ -2460,6 +2496,13 @@ fn dots(ctx: &egui::Context, t: &crate::theme::Tokens) -> Option<egui::TextureId
     Some(id)
 }
 
+/// Whether the dot grid behind the canvas is drawn: the preference, except on a software
+/// rasterizer (WARP), where a window-sized, mostly transparent quad costs tens of milliseconds a
+/// frame for a faint decoration.
+fn dots_enabled(app: &PhotocraftApp) -> bool {
+    app.session.prefs().interface.show_canvas_dots && !app.perf.gpu_info.is_software()
+}
+
 fn paint_dots(ui: &egui::Ui, rect: Rect, enabled: bool) {
     if !enabled {
         return;
@@ -2487,7 +2530,7 @@ pub fn mode_label(doc: &Document) -> &'static str {
 fn start_screen(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let t = crate::theme::Tokens::get(ui.ctx());
     let area = ui.available_rect_before_wrap();
-    paint_dots(ui, area, app.session.prefs().interface.show_canvas_dots);
+    paint_dots(ui, area, dots_enabled(app));
     // File › Open Recent, newest first (on the web there are no paths to reopen).
     let recent: Vec<String> = if cfg!(target_arch = "wasm32") { Vec::new() } else { app.ui.recent_files.iter().take(HOME_RECENT).cloned().collect() };
     let recent_h = if recent.is_empty() { 0.0 } else { 34.0 + recent.len() as f32 * HOME_RECENT_ROW };
@@ -2733,7 +2776,7 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
         Some(c) => {
             ui.painter_at(rect).rect_filled(rect, 0.0, c);
         }
-        None => paint_dots(ui, rect, app.session.prefs().interface.show_canvas_dots),
+        None => paint_dots(ui, rect, dots_enabled(app)),
     }
     let border = app.session.prefs().interface.canvas_border;
     // Default-mode Crop changes its camera during input. Defer its image until the new camera
@@ -3008,6 +3051,8 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
         }
     }
 
+    // References beside the canvas take the pointer when it is on one (pdn/refs.rs).
+    let refs_busy = crate::pdn::active() && crate::pdn::refs::interact(app, ui, &xf, img_rect, idx);
     // Pen pressure/tilt for this frame's tool events (mouse = 1.0), unless Preferences › Tools ›
     // Use Tablet Pressure is off; the pen's eraser end selects the Eraser.
     app.stylus.use_pressure = app.session.prefs().tools.use_tablet_pressure;
@@ -3153,8 +3198,13 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
             let d = xf.to_doc(p);
             crate::layer_picker::sample_at(app, d[0], d[1]);
         }
-    } else if primary && !stroke_dismissal {
-        let mods = ui.input(|i| i.modifiers);
+    } else if primary && !stroke_dismissal && !refs_busy {
+        let mut mods = ui.input(|i| i.modifiers);
+        // Paint.NET's shapes: the right button, held while drawing, does what ⇧ does.
+        let shape_chord = crate::pdn::active() && crate::vector_ui::is_shape_tool(tool) && app.drag.is_some();
+        if crate::pdn::active() && crate::vector_ui::is_shape_tool(tool) && ui.input(|i| i.pointer.secondary_down()) {
+            mods.shift = true;
+        }
         // An ⌥-click the window manager took never arrives; say so (alt_grab.rs).
         crate::alt_grab::watch(app, &ctx, egui::Id::new(("pc-alt-grab", idx)), rect, tool, !under_dialog);
         // Tools follow the left button; the right one opens the Brush Preset picker or erases
@@ -3210,9 +3260,30 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
             (buttons.started, buttons.dragged, buttons.stopped, buttons.clicked) = (false, false, false, false);
         }
         // Right-click with the Move tool, or ⌘/Ctrl+right-click: the layers under the pointer.
+        // Paint.NET's Paint Bucket: the right button fills with the secondary colour.
+        let bucket_right = crate::pdn::active() && tool == Tool::PaintBucket;
+        if bucket_right
+            && response.secondary_clicked()
+            && let Some(p) = response.interact_pointer_pos()
+        {
+            let d = xf.to_doc(p);
+            crate::pdn::finalize::retarget_fill(app, d[0], d[1]);
+            if !crate::rasterize_prompt::intercept(app, tool, d[0], d[1], 1.0) {
+                let o = app.ui.tool_options.clone();
+                let c = app.session.tools.background;
+                let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+                let hex = format!("#{:02x}{:02x}{:02x}", q(c[0]), q(c[1]), q(c[2]));
+                let _ = app.run(
+                    "paint.bucket",
+                    json!({"x": d[0].floor(), "y": d[1].floor(), "tolerance": o.tolerance, "contiguous": o.contiguous, "antiAlias": o.anti_alias, "sampleAllLayers": o.sample_all_layers, "opacity": o.fill_opacity, "contents": "color", "color": hex, "target": paint_target(app)}),
+                );
+            }
+        }
         if response.secondary_clicked()
             && !lasso_retracted
             && !transforming
+            && !shape_chord
+            && !bucket_right
             && crate::layer_pick_ui::is_gesture(tool, mods)
             && let Some(p) = response.interact_pointer_pos()
         {
@@ -3479,6 +3550,10 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     }
     let xf = if crop_camera { ViewXform { center: view.center, rotation: view.rotation, ..xf } } else { xf };
     let (img_rect, beyond, layer_edges) = painted.unwrap_or_else(|| paint_canvas(app, ui, &view, xf));
+    if crate::pdn::active() {
+        crate::pdn::refs::draw(app, &ctx, &painter, &xf, img_rect, idx);
+        crate::pdn::refs::overlays(app, &ctx, &xf, idx);
+    }
     if primary && !(hand_pan && response.dragged()) {
         if app.ui.extras.grid && app.ui.view.extras {
             crate::rulers::draw_grid(app, &painter, &xf, &doc);
@@ -4909,6 +4984,9 @@ pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers)
     }
     match ev {
         ToolEvent::Down { x, y, pressure } => {
+            if tool == Tool::PaintBucket {
+                crate::pdn::finalize::retarget_fill(app, x, y);
+            }
             // Painting a type, shape, Smart Object or fill layer asks to rasterize it first
             // (⌥-click with the Clone Stamp or Healing Brush only sets the source).
             let sets_source = matches!(tool, Tool::CloneStamp | Tool::Healing) && mods.alt;
@@ -4983,6 +5061,15 @@ pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers)
                 }
                 Tool::CloneStamp | Tool::Healing if mods.alt => {
                     crate::retouch_ui::set_source(app, x, y);
+                    return;
+                }
+                Tool::Glow => {
+                    crate::pdn::glow::click(app, x, y);
+                    return;
+                }
+                Tool::MagicWand if crate::pdn::active() => {
+                    let mode = selection_mode(app, mods);
+                    crate::pdn::wand::click(app, [x, y], mode);
                     return;
                 }
                 Tool::MagicWand => {
@@ -5172,7 +5259,7 @@ pub(crate) fn event_tool(app: &PhotocraftApp, mods: egui::Modifiers) -> Tool {
 pub(crate) fn command_moves_layer(app: &PhotocraftApp, tool: Tool, p: [f64; 2], mods: egui::Modifiers) -> bool {
     let selection_tool = matches!(tool, Tool::RectMarquee | Tool::EllipseMarquee | Tool::Lasso | Tool::PolygonLasso | Tool::MagicWand);
     let floating = app.session.active().is_some_and(|st| photocraft_engine::float_cmds::floating(st).is_some());
-    selection_tool && mods.command && !mods.shift && !floating && app.ui.polygon.is_empty() && !inside_selection(app, p)
+    selection_tool && mods.command && !crate::pdn::active() && !mods.shift && !floating && app.ui.polygon.is_empty() && !inside_selection(app, p)
 }
 
 /// The guide a ⌘ press with selection tool `tool` at `p` drags (vertical?, index), as the Move
@@ -5181,7 +5268,7 @@ pub(crate) fn command_moves_layer(app: &PhotocraftApp, tool: Tool, p: [f64; 2], 
 pub(crate) fn command_guide_at(app: &PhotocraftApp, tool: Tool, p: [f64; 2], mods: egui::Modifiers) -> Option<(bool, usize)> {
     let selection_tool = matches!(tool, Tool::RectMarquee | Tool::EllipseMarquee | Tool::Lasso | Tool::PolygonLasso | Tool::MagicWand);
     let idle = app.ui.polygon.is_empty() && !crate::lasso_ui::active(app) && app.ui.transform.is_none();
-    (selection_tool && mods.command && idle).then(|| crate::rulers::guide_at(app, p[0], p[1])).flatten()
+    (selection_tool && mods.command && !crate::pdn::active() && idle).then(|| crate::rulers::guide_at(app, p[0], p[1])).flatten()
 }
 
 /// Photoshop's cursor over a selection: what a press (or the drag under way) would do.
@@ -5363,6 +5450,8 @@ pub(crate) fn finish_gesture(app: &mut PhotocraftApp, d: Drag) {
     match d.tool {
         Tool::ObjectSelection => crate::retouch_ui::finish_object_selection(app, d.start, [end[0], end[1]], d.modifiers),
         Tool::FreeformPen => crate::vector_ui::freeform_finish(app, &d.points, d.lasso.as_ref().map_or(&[], |l| l.straight())),
+        // Paint.NET: a click without dragging makes nothing (it only ends the shape before).
+        t if crate::pdn::active() && crate::vector_ui::is_shape_tool(t) && crate::shape_dialog::is_click(d.start, &d.points, app.point_zoom()) => {}
         // Photoshop: a click without dragging opens Create Rectangle / Ellipse / … instead.
         t if crate::vector_ui::is_shape_tool(t)
             && crate::shape_dialog::is_click(d.start, &d.points, app.point_zoom())

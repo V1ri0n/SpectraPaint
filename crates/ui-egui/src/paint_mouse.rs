@@ -125,7 +125,25 @@ pub fn canvas_buttons(app: &mut PhotocraftApp, response: &Response, tool: Tool) 
     }
     let erase_click = erase && right_click;
     app.secondary_erase = right_start || erase_click;
-    let right_drag = right_stroke || resizing;
+    // Paint.NET's selections with the right button: with Ctrl it inverts, with Alt it intersects.
+    let pdn_select = crate::pdn::active() && crate::tool_feedback::is_selection_tool(tool);
+    let sel_start = pdn_select && !erase && (mods.ctrl || mods.command || mods.alt) && response.drag_started_by(PointerButton::Secondary);
+    if sel_start {
+        crate::pdn::set_right_select(true);
+    }
+    let sel_active = pdn_select && crate::pdn::right_select() && app.drag.is_some();
+    if !sel_active && crate::pdn::right_select() && !sel_start {
+        crate::pdn::set_right_select(false);
+    }
+    let right_drag = right_stroke || resizing || sel_active;
+    let right_start = right_start || sel_start;
+    // A shape being drawn goes on while the left button is held, whatever the right one does (it
+    // acts as ⇧, pressed and let go as often as wanted): egui hands the drag to the right button
+    // when it joins, so the left button is followed here and the shape ends with its release.
+    if crate::pdn::active() && crate::vector_ui::is_shape_tool(tool) && app.drag.is_some() {
+        let (down, released) = response.ctx.input(|i| (i.pointer.primary_down(), i.pointer.primary_released()));
+        return Buttons { started: false, dragged: down, stopped: released || !down, clicked: false };
+    }
     Buttons {
         started: response.drag_started_by(PointerButton::Primary) || right_start || resize_start,
         dragged: response.dragged_by(PointerButton::Primary) || (right_drag && response.dragged_by(PointerButton::Secondary)),

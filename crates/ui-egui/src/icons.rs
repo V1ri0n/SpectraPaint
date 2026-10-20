@@ -119,6 +119,7 @@ pub fn tool_icon(t: Tool) -> &'static str {
         Tool::Hand => "hand",
         Tool::RotateView => "compass",
         Tool::Zoom => "zoom-in",
+        Tool::Glow => "sparkles",
         Tool::SpotHealing | Tool::Healing => "bandage",
         Tool::Remove => "bandage-sparkle",
         Tool::Patch => "lasso-select",

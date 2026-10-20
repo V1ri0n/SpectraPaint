@@ -176,7 +176,20 @@ impl Session {
         if let Some(g) = p.styles {
             st.styles = g;
         }
-        if let Some(g) = p.shapes {
+        if let Some(mut g) = p.shapes {
+            // Shapes added to the library since the file was saved appear in it too.
+            for b in shapes::builtin() {
+                match g.iter_mut().find(|x| x.name == b.name) {
+                    Some(have) => {
+                        for item in b.items {
+                            if !have.items.iter().any(|i| i.name == item.name) {
+                                have.items.push(item);
+                            }
+                        }
+                    }
+                    None => g.push(b),
+                }
+            }
             st.shapes = g;
         }
         if let Some(g) = p.pattern_groups {

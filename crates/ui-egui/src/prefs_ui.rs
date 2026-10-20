@@ -98,6 +98,7 @@ fn selected_theme(interface: &prefs::Interface, system: Option<egui::Theme>) -> 
             LightTheme::Adwaita => ThemeKind::Adwaita,
             LightTheme::BreezeLight => ThemeKind::BreezeLight,
             LightTheme::SoftLight => ThemeKind::SoftLight,
+            LightTheme::PaintNetLight => ThemeKind::PaintNetLight,
         }
     } else {
         match interface.dark_theme {
@@ -108,6 +109,7 @@ fn selected_theme(interface: &prefs::Interface, system: Option<egui::Theme>) -> 
             DarkTheme::AdwaitaDark => ThemeKind::AdwaitaDark,
             DarkTheme::BreezeDark => ThemeKind::BreezeDark,
             DarkTheme::SoftDark => ThemeKind::SoftDark,
+            DarkTheme::PaintNet => ThemeKind::PaintNet,
         }
     }
 }
@@ -129,6 +131,7 @@ pub(crate) fn cycle_appearance(app: &mut PhotocraftApp, ctx: &egui::Context) {
 }
 
 const LIGHT_THEME_OPTIONS: &[(&str, ThemeKind)] = &[
+    ("paintNetLight", ThemeKind::PaintNetLight),
     ("studioLight", ThemeKind::StudioLight),
     ("proLightGray", ThemeKind::ProLightGray),
     ("proLight", ThemeKind::ProLight),
@@ -138,6 +141,7 @@ const LIGHT_THEME_OPTIONS: &[(&str, ThemeKind)] = &[
     ("softLight", ThemeKind::SoftLight),
 ];
 const DARK_THEME_OPTIONS: &[(&str, ThemeKind)] = &[
+    ("paintNet", ThemeKind::PaintNet),
     ("proMedium", ThemeKind::ProMedium),
     ("pro", ThemeKind::Pro),
     ("studio", ThemeKind::Studio),

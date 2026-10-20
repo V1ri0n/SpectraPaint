@@ -143,6 +143,7 @@ pub mod paint_mouse;
 pub mod palette;
 mod panel_docking;
 pub mod panels;
+pub mod pdn;
 pub mod parity;
 pub mod patch_preview;
 pub(crate) mod pattern_fill_ui;
@@ -633,6 +634,8 @@ pub struct PhotocraftApp {
     pub(crate) adjust_preview: Option<adjust_preview::AdjustPreview>,
     /// Synthetic input events queued by automation (`ui.click`, `ui.key`, …), injected next frame.
     pub(crate) synthetic: Vec<egui::Event>,
+    /// Keys pressed in one of the Paint.NET tool windows, to be handled as the main window's own.
+    pub(crate) forwarded_keys: Vec<egui::Event>,
     /// True only while a frame is processing synthetic automation input. It
     /// makes shortcut- and dialog-triggered commands pass the same policy as
     /// direct control calls.
@@ -818,6 +821,7 @@ impl PhotocraftApp {
             color_range: None,
             adjust_preview: None,
             synthetic: Vec::new(),
+            forwarded_keys: Vec::new(),
             automation_input: false,
             channel_thumbs: None,
             channel_views: HashMap::new(),
@@ -1731,6 +1735,11 @@ impl eframe::App for PhotocraftApp {
     }
 
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        // Only the main window's input is the app's (the Paint.NET tool windows are windows of
+        // their own, see `pdn::windows`).
+        if raw_input.viewport_id != egui::ViewportId::ROOT {
+            return;
+        }
         // An undecorated window gets its caption back when the toolkit changes its flags
         // (maximize, restore, …): take it off again before the frame is laid out (#2246).
         if let Some(window_frame) = self.services.window_frame.as_mut() {
@@ -1747,6 +1756,11 @@ impl eframe::App for PhotocraftApp {
         if cfg!(any(target_os = "windows", target_os = "linux")) && self.session.prefs().enhanced_controls.zoom_with_trackpad_pinch {
             wheel_nav::fold_legacy_pinch(ctx, raw_input);
         }
+        // Paint.NET zooms with Ctrl + wheel (Photoshop: Alt + wheel); Shift + wheel scrolls sideways.
+        if pdn::active() {
+            wheel_nav::ctrl_wheel_zooms(&mut raw_input.events);
+        }
+        raw_input.events.append(&mut self.forwarded_keys);
         raw_input.events.extend(self.take_synthetic_step());
         // A pen held still is no touch screen's press-and-hold right click (stylus.rs).
         let pen_down = self.stylus.pen_contacts.observe(&raw_input.events);
@@ -1798,26 +1812,41 @@ impl eframe::App for PhotocraftApp {
         // system title bar this is where the document name lives, as the in-app title is hidden.
         panels::sync_window_title(self, &ctx);
         let chrome = !self.ui.view.hides_chrome();
-        if chrome && self.ui.panels.menu_bar {
-            panels::title_bar(self, ui);
+        let pdn = self.ui.theme.is_paint_net();
+        let tc = gpu_canvas::now_ms();
+        if chrome && pdn {
+            pdn::chrome(self, ui);
+            self.perf.span("x_chrome", gpu_canvas::now_ms() - tc);
+        } else {
+            if chrome && self.ui.panels.menu_bar {
+                panels::title_bar(self, ui);
+            }
+            if chrome && self.ui.panels.options_bar {
+                panels::options_bar(self, ui);
+            }
+            if chrome && self.ui.panels.status_bar {
+                panels::status_bar(self, ui);
+            }
+            if chrome && self.ui.panels.toolbar {
+                panels::toolbar(self, ui);
+            }
+            if chrome && self.ui.panels.dock {
+                panels::right_dock(self, ui);
+            }
         }
-        if chrome && self.ui.panels.options_bar {
-            panels::options_bar(self, ui);
-        }
-        if chrome && self.ui.panels.status_bar {
-            panels::status_bar(self, ui);
-        }
-        if chrome && self.ui.panels.toolbar {
-            panels::toolbar(self, ui);
-        }
-        if chrome && self.ui.panels.dock {
-            panels::right_dock(self, ui);
-        }
+        let tc = gpu_canvas::now_ms();
         let t = theme::Tokens::get(&ctx);
         let backdrop = if chrome { prefs_ui::pasteboard_color(self).unwrap_or(t.canvas) } else { egui::Color32::BLACK };
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(backdrop)).show(ui, |ui| {
             canvas::document_area(self, ui);
         });
+        self.perf.span("x_canvas", gpu_canvas::now_ms() - tc);
+        let tc = gpu_canvas::now_ms();
+        if chrome && pdn {
+            pdn::windows::show(self, &ctx);
+        }
+        self.perf.span("x_windows", gpu_canvas::now_ms() - tc);
+        let tc = gpu_canvas::now_ms();
         panels::properties_window(self, &ctx);
         brush_panel::window(self, &ctx);
         preset_panels::windows(self, &ctx);
@@ -1861,6 +1890,7 @@ impl eframe::App for PhotocraftApp {
             egui::Modal::new(egui::Id::new("screen-color-wait")).frame(egui::Frame::NONE).backdrop_color(egui::Color32::TRANSPARENT).show(&ctx, |_| {});
             ctx.set_cursor_icon(egui::CursorIcon::Wait);
         }
+        self.perf.span("x_rest", gpu_canvas::now_ms() - tc);
         self.perf.frame(gpu_canvas::now_ms() - t0);
         // Synthetic input is injected one press/release step per frame: keep frames coming until
         // the queue is empty, then release control replies waiting on it.

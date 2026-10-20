@@ -63,6 +63,8 @@ impl Default for CameraRawPreviewState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Tool {
     Move,
+    /// Paint.NET-style Glow: a click makes the object under it glow (layer style glow).
+    Glow,
     Artboard,
     RectMarquee,
     EllipseMarquee,
@@ -138,7 +140,7 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub const ALL: [Tool; 67] = [
+    pub const ALL: [Tool; 68] = [
         Tool::Move,
         Tool::Artboard,
         Tool::RectMarquee,
@@ -172,6 +174,7 @@ impl Tool {
         Tool::Hand,
         Tool::RotateView,
         Tool::Zoom,
+        Tool::Glow,
         Tool::Remove,
         Tool::SpotHealing,
         Tool::Healing,
@@ -246,6 +249,7 @@ impl Tool {
             Tool::Hand => "Hand Tool",
             Tool::RotateView => "Rotate View Tool",
             Tool::Zoom => "Zoom Tool",
+            Tool::Glow => "Glow Tool",
             Tool::Remove => "Remove Tool",
             Tool::SpotHealing => "Spot Healing Brush Tool",
             Tool::Healing => "Healing Brush Tool",
@@ -315,34 +319,43 @@ impl Tool {
                 | Tool::Sponge
         )
     }
-    /// Photoshop default single-key shortcut (`'\0'` = none, e.g. the Blur group).
+    /// Paint.NET's single-key shortcut (`'\0'` = none). Pressing a group's key again cycles it.
     pub fn key(self) -> char {
         match self {
-            Tool::Move | Tool::Artboard => 'V',
-            Tool::RectMarquee | Tool::EllipseMarquee => 'M',
-            Tool::Brush | Tool::Pencil | Tool::MixerBrush | Tool::ColorReplacement => 'B',
-            Tool::Eraser | Tool::BackgroundEraser | Tool::MagicEraser => 'E',
-            Tool::Eyedropper | Tool::ColorSampler | Tool::Ruler | Tool::Note | Tool::Count => 'I',
-            Tool::Lasso | Tool::PolygonLasso | Tool::MagneticLasso => 'L',
-            Tool::MagicWand => 'W',
+            Tool::Move => 'M',
+            Tool::Artboard => '\0',
+            Tool::RectMarquee | Tool::Lasso | Tool::EllipseMarquee | Tool::MagicWand => 'S',
+            Tool::PolygonLasso | Tool::MagneticLasso => '\0',
+            Tool::Brush => 'B',
+            Tool::Pencil => 'P',
+            Tool::MixerBrush => '\0',
+            Tool::ColorReplacement => 'R',
+            Tool::Eraser => 'E',
+            Tool::BackgroundEraser | Tool::MagicEraser => '\0',
+            Tool::Eyedropper => 'K',
+            Tool::ColorSampler | Tool::Ruler | Tool::Note | Tool::Count => '\0',
             Tool::Crop | Tool::PerspectiveCrop | Tool::Slice | Tool::SliceSelect => 'C',
-            Tool::Frame => 'K',
-            Tool::Gradient | Tool::PaintBucket => 'G',
-            Tool::Type | Tool::VerticalType | Tool::HorizontalTypeMask | Tool::VerticalTypeMask => 'T',
+            Tool::Frame => '\0',
+            Tool::Gradient => 'G',
+            Tool::PaintBucket => 'F',
+            Tool::Type => 'T',
+            Tool::VerticalType | Tool::HorizontalTypeMask | Tool::VerticalTypeMask => '\0',
             Tool::Hand => 'H',
-            Tool::RotateView => 'R',
+            Tool::RotateView => '\0',
             Tool::Zoom => 'Z',
+            Tool::Glow => '\0',
             Tool::Remove | Tool::SpotHealing | Tool::Healing | Tool::Patch | Tool::ContentAwareMove | Tool::RedEye => 'J',
-            Tool::CloneStamp | Tool::PatternStamp => 'S',
+            Tool::CloneStamp => 'L',
+            Tool::PatternStamp => '\0',
             Tool::HistoryBrush => 'Y',
             Tool::Blur | Tool::Sharpen | Tool::Smudge => '\0',
-            // In the Marquee flyout, but M cycles only the Rectangular and Elliptical Marquee.
+            // In the Marquee flyout, but S cycles only the Paint.NET selection tools.
             Tool::SingleRowMarquee | Tool::SingleColumnMarquee => '\0',
-            Tool::Dodge | Tool::Burn | Tool::Sponge => 'O',
+            Tool::Dodge | Tool::Burn | Tool::Sponge => '\0',
             Tool::QuickSelection | Tool::ObjectSelection => 'W',
-            Tool::Pen | Tool::FreeformPen | Tool::CurvaturePen | Tool::AddAnchorPoint | Tool::DeleteAnchorPoint | Tool::ConvertPoint => 'P',
+            Tool::Pen | Tool::FreeformPen | Tool::CurvaturePen | Tool::AddAnchorPoint | Tool::DeleteAnchorPoint | Tool::ConvertPoint => 'N',
             Tool::PathSelection | Tool::DirectSelection => 'A',
-            Tool::Rectangle | Tool::EllipseShape | Tool::Triangle | Tool::Polygon | Tool::Line | Tool::CustomShape => 'U',
+            Tool::Rectangle | Tool::EllipseShape | Tool::Triangle | Tool::Polygon | Tool::Line | Tool::CustomShape => 'O',
         }
     }
     /// Glyph drawn in the toolbar (vector icons come later).
@@ -364,6 +377,7 @@ impl Tool {
             Tool::Hand => "✋",
             Tool::RotateView => "🧭",
             Tool::Zoom => "🔍",
+            Tool::Glow => "✦",
             _ => "•",
         }
     }
@@ -413,6 +427,17 @@ pub struct Panels {
     /// floating window rather than a modal so the canvas stays usable while a gradient is edited.
     #[serde(default)]
     pub gradient_editor: bool,
+    /// Paint.NET layout: where the floating Tools / History / Layers / Colors windows were put,
+    /// as `[x, y, width, height]` in points, by window key (`pdn::windows`).
+    #[serde(default)]
+    pub pdn_windows: std::collections::BTreeMap<String, [f32; 4]>,
+    /// Paint.NET's Colors window shows the full RGB / HSV / hex form (`More >>`) or only the wheel.
+    #[serde(default = "yes")]
+    pub pdn_colors_more: bool,
+    /// Paint.NET layout: the tool windows are drawn inside the main window, not as windows of their
+    /// own. Each OS window is presented every frame, which is slow on a weak graphics card.
+    #[serde(default)]
+    pub pdn_embed: bool,
 }
 
 impl Default for Panels {
@@ -434,6 +459,9 @@ impl Default for Panels {
             rail: true,
             menu_bar: true,
             gradient_editor: false,
+            pdn_windows: Default::default(),
+            pdn_colors_more: true,
+            pdn_embed: false,
         }
     }
 }
@@ -498,6 +526,13 @@ pub struct DocWindow {
     /// A tab dragged off the tab strip opens its window where it was dropped (#3733).
     #[serde(default)]
     pub position: Option<[f32; 2]>,
+}
+
+impl ToolOptions {
+    /// The radii a new rectangle gets: one for all corners, or each its own.
+    pub fn radii(&self) -> [f32; 4] {
+        if self.corner_unlinked { self.corner_radii.map(|r| r.max(0.0)) } else { [self.corner_radius.max(0.0); 4] }
+    }
 }
 
 /// Options-bar state for tools (Photoshop keeps these per tool).
@@ -583,6 +618,18 @@ pub struct ToolOptions {
     #[serde(default)]
     pub shape_stroke: crate::shape_stroke_ui::StrokeOptions,
     pub corner_radius: f32,
+    /// Rectangle corners one by one (top left, top right, bottom right, bottom left), used when
+    /// `corner_unlinked` is on; otherwise every corner has `corner_radius`.
+    pub corner_radii: [f32; 4],
+    pub corner_unlinked: bool,
+    /// The Glow tool: 0 around the object, 1 inside it, 2 both; size in px; strength in %.
+    pub glow_mode: u8,
+    pub glow_size: f32,
+    pub glow_strength: f32,
+    /// The layer the tool lit last: its glow follows the options and the primary colour (0 = none).
+    pub glow_layer: u64,
+    /// Rounding of the corners of new triangles, polygons, stars and other shapes (not rectangles).
+    pub shape_corner: f32,
     pub polygon_sides: u32,
     pub line_weight: f32,
     /// Freeform Pen › Curve Fit: how far (px) the fitted path may stray from the pointer trace.
@@ -797,10 +844,17 @@ impl Default for ToolOptions {
             finger_painting: false,
             enhance_edge: false,
             vector_mode: "path".into(),
-            shape_fill: true,
-            stroke_width: 0.0,
+            shape_fill: false,
+            stroke_width: 2.0,
             shape_stroke: Default::default(),
             corner_radius: 0.0,
+            corner_radii: [0.0; 4],
+            corner_unlinked: false,
+            glow_mode: 0,
+            glow_size: 20.0,
+            glow_strength: 80.0,
+            glow_layer: 0,
+            shape_corner: 0.0,
             polygon_sides: 5,
             line_weight: 3.0,
             curve_fit: default_curve_fit(),

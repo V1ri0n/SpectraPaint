@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/*", "apps/*", "xtask"]
+# vendored third-party crates (see [patch.crates-io]): not part of the workspace
+exclude = ["vendor/egui-wgpu"]
 default-members = ["crates/*", "apps/photocraft", "apps/photocraft-cli", "xtask"]
 
 [workspace.package]
@@ -67,6 +69,12 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 dbg_macro = "warn"
 todo = "warn"
+
+# egui-wgpu 0.36.2 with one change: samples textures with `textureLoad`s on a software rasterizer
+# (WARP), where the hardware sampler path costs ~130 ms per full-window quad. See
+# vendor/egui-wgpu/PATCH.md.
+[patch.crates-io]
+egui-wgpu = { path = "vendor/egui-wgpu" }
 
 [profile.dev.package."*"]
 opt-level = 2

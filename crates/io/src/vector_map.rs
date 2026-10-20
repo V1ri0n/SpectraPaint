@@ -435,7 +435,7 @@ pub fn vogk_bytes(s: &LiveShape, dpi: f32) -> Option<Vec<u8>> {
                 .with("keyOriginLineArrLngth", Value::Double(0.0))
                 .with("keyOriginLineArrConc", Value::Integer(0))
         }
-        LiveShape::Polygon { .. } => return None,
+        LiveShape::Polygon { .. } | LiveShape::Rounded { .. } => return None,
     };
     let o = o.with("keyOriginIndex", Value::Integer(0));
     let d = Descriptor::new("null").with("keyDescriptorList", Value::List(vec![Value::Descriptor(o)]));

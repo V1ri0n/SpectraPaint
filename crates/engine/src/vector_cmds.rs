@@ -449,6 +449,7 @@ fn live_kind(l: &LiveShape) -> &'static str {
         LiveShape::Polygon { star_ratio, .. } if *star_ratio < 1.0 => "star",
         LiveShape::Polygon { .. } => "polygon",
         LiveShape::Line { .. } => "line",
+        LiveShape::Rounded { .. } => "path",
     }
 }
 
@@ -497,6 +498,15 @@ pub fn translate_vectors(doc: &Document, l: &mut Layer, dx: f64, dy: f64) {
 /// Applies an affine transform to a shape's path, keeping the live shape when the transform
 /// is a translation plus axis-aligned scale (otherwise the shape stops being parametric).
 pub fn transform_shape(sh: &mut ShapeLayer, a: &Affine) {
+    // Rounded corners are made again from the moved outline, with the radius scaled with it.
+    if let Some(LiveShape::Rounded { base, radii }) = &sh.live {
+        let k = (a.m[0] * a.m[3] - a.m[1] * a.m[2]).abs().sqrt();
+        let (base, radii) = (base.transform(a), radii.iter().map(|r| r * k).collect::<Vec<_>>());
+        sh.path = vector::shapes::round_corners(&base, &radii);
+        sh.live = Some(LiveShape::Rounded { base, radii });
+        sh.psd_raw = None;
+        return;
+    }
     sh.path = sh.path.transform(a);
     let [m0, m1, m2, m3, tx, ty] = a.m;
     let axis_aligned = m1.abs() < 1e-12 && m2.abs() < 1e-12 && m0 > 0.0 && m3 > 0.0;
@@ -522,6 +532,8 @@ pub fn transform_shape(sh: &mut ShapeLayer, a: &Affine) {
                     let width_scale = if old_length > 0.0 && new_length > 0.0 { m0 * m3 * old_length / new_length } else { m0.min(m3) };
                     LiveShape::Line { from: pt(from), to: pt(to), weight: weight * width_scale }
                 }
+                // Handled above.
+                rounded @ LiveShape::Rounded { .. } => rounded,
             })
         }
         // Flips and 90° turns keep rectangles, ellipses and lines live (Image Rotation): the new
@@ -601,6 +613,11 @@ fn shape_info(s: &Session, id: LayerId) -> Result<Value> {
         "fill": sh.fill.as_ref().map(fill_json),
         "stroke": sh.stroke.as_ref().map(stroke_json),
         "live": sh.live.as_ref().map(live_json),
+        "corners": match &sh.live {
+            Some(LiveShape::Rounded { base, radii }) => json!({"count": vector::shapes::corner_count(base), "radii": radii}),
+            Some(LiveShape::Polygon { .. }) | None => json!({"count": vector::shapes::corner_count(&sh.path), "radii": []}),
+            _ => Value::Null,
+        },
         "kind": sh.live.as_ref().map_or("path", live_kind),
         "bounds": bounds,
     }))
@@ -719,6 +736,31 @@ fn shape_edit(s: &mut Session, p: &Value) -> Result<Value> {
                 sh.live = Some(l);
                 sh.psd_raw = None;
             }
+        }
+        if let Some(c) = p.get("corners") {
+            let radii: Vec<f64> = match c {
+                Value::Number(n) => vec![n.as_f64().unwrap_or(0.0).max(0.0)],
+                Value::Array(a) => a.iter().map(|v| v.as_f64().unwrap_or(0.0).max(0.0)).collect(),
+                _ => vec![0.0],
+            };
+            match sh.live.take() {
+                Some(LiveShape::Rounded { base, .. }) => {
+                    sh.path = vector::shapes::round_corners(&base, &radii);
+                    sh.live = Some(LiveShape::Rounded { base, radii });
+                }
+                // A rectangle has its own radii, an ellipse and a line no corners.
+                Some(l @ (LiveShape::Rect { .. } | LiveShape::Ellipse { .. } | LiveShape::Line { .. })) => {
+                    sh.live = Some(l);
+                    return Err(bad(CMD, "`corners` is for polygons, stars and other outlines (a rectangle has `radii`)"));
+                }
+                other if radii.iter().all(|r| *r <= 0.0) => sh.live = other,
+                _ => {
+                    let base = sh.path.clone();
+                    sh.path = vector::shapes::round_corners(&base, &radii);
+                    sh.live = Some(LiveShape::Rounded { base, radii });
+                }
+            }
+            sh.psd_raw = None;
         }
         if let Some(m) = nums::<6>(p, "transform") {
             transform_shape(sh, &Affine { m });

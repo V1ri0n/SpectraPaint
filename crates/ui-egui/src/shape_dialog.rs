@@ -58,7 +58,7 @@ pub fn open(app: &mut PhotocraftApp, tool: Tool, at: [f64; 2]) -> Option<u64> {
         return None;
     }
     let o = &app.ui.tool_options;
-    let r = f64::from(o.corner_radius.max(0.0));
+    let radii = o.radii().map(f64::from);
     let sides = o.polygon_sides.clamp(3, 100);
     let mut f = Map::new();
     f.insert(MARK.into(), json!(kind));
@@ -70,8 +70,8 @@ pub fn open(app: &mut PhotocraftApp, tool: Tool, at: [f64; 2]) -> Option<u64> {
     f.insert("fromCenter".into(), json!(false));
     match kind {
         "rectangle" => {
-            f.insert("radii".into(), json!([r, r, r, r]));
-            f.insert("linkRadii".into(), json!(true));
+            f.insert("radii".into(), json!(radii));
+            f.insert("linkRadii".into(), json!(!o.corner_unlinked));
         }
         "polygon" => {
             f.insert("sides".into(), json!(sides));

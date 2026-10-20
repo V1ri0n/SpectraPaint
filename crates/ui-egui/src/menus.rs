@@ -52,7 +52,7 @@ pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
     ("view.lockGuides", "Lock Guides", &["View"], Some("Cmd+Alt+;")),
     ("view.extras", "Extras", &["View"], Some("Cmd+H")),
     ("view.show.targetPath", "Target Path", &["View", "Show"], Some("Cmd+Shift+H")),
-    ("view.screenMode.cycle", "Cycle Screen Mode", &[], Some("F")),
+    ("view.screenMode.cycle", "Cycle Screen Mode", &[], None),
     ("edit.freeTransformCopy", "Free Transform a Copy", &[], Some("Cmd+Alt+T")),
     ("type.editText", "Edit Type", &[], None),
     ("view.zoomIn", "Zoom In", &["View"], Some("Cmd+=")),
@@ -91,8 +91,18 @@ pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
     ("window.theme.breezeDark", "Breeze Dark Theme", &["Window", "Theme"], None),
     ("window.theme.softLight", "Soft Light Theme", &["Window", "Theme"], None),
     ("window.theme.softDark", "Soft Dark Theme", &["Window", "Theme"], None),
+    ("window.theme.paintNet", "Paint.NET Dark Theme", &["Window", "Theme"], None),
+    ("window.theme.paintNetLight", "Paint.NET Light Theme", &["Window", "Theme"], None),
     ("window.theme.system", "Sync with system", &["Window", "Theme"], None),
     ("edit.search", "Search…", &["Edit"], Some("Cmd+F")),
+    ("pdn.layerProperties", "Layer Properties…", &[], Some("F4")),
+    ("pdn.glow", "Object Glow…", &[], None),
+    ("pdn.importPdf", "Import PDF…", &[], None),
+    ("pdn.exportPdf", "Export to PDF…", &[], None),
+    ("pdn.pdfPages", "PDF Pages", &[], None),
+    ("pdn.bench", "Performance Check…", &[], None),
+    ("pdn.addRef", "Add Reference…", &[], None),
+    ("pdn.toggleRefs", "Show References", &[], None),
     ("help.discord", "Join the ArtCraft Discord…", &["Help"], None),
     ("help.website", "PhotoCraft Website", &["Help"], None),
     ("help.artcraftWebsite", "ArtCraft Website", &["Help"], None),
@@ -163,6 +173,10 @@ pub fn invoke(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, params: Va
 
 /// [`invoke`] without the unsaved-changes prompt, for once the user has already answered it.
 pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, params: Value) -> Result<Value, String> {
+    // Paint.NET: what is pasted belongs to the layer it is pasted on.
+    if crate::pdn::active() && id.starts_with("edit.paste") {
+        crate::pdn::finalize::note_paste(ctx);
+    }
     if let Some(tool) = crate::tool_shortcuts::tool(id) {
         app.ui.tool = tool;
         return Ok(json!({"tool": tool}));
@@ -290,6 +304,10 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
             Ok(Value::Null)
         }
         "layer.duplicate" if params.as_object().is_none_or(|o| o.is_empty()) => crate::duplicate_layer_ui::open(app),
+        "file.new" if crate::pdn::active() && params.as_object().is_none_or(|o| o.is_empty()) => {
+            crate::pdn::new_image::open(ctx);
+            Ok(Value::Null)
+        }
         "file.new" if params.as_object().is_none_or(|o| o.is_empty()) => {
             let fields = app.new_document_fields();
             let d = app.ui.open_dialog(DialogKind::NewDocument, fields);
@@ -392,7 +410,9 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
         | "window.theme.breezeLight"
         | "window.theme.breezeDark"
         | "window.theme.softLight"
-        | "window.theme.softDark" => {
+        | "window.theme.softDark"
+        | "window.theme.paintNet"
+        | "window.theme.paintNetLight" => {
             let k = crate::theme::ThemeKind::from_name(&id["window.theme.".len()..]).unwrap_or_default();
             app.set_theme(ctx, k);
             Ok(Value::Null)
@@ -407,6 +427,47 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
         }
         "edit.search" => {
             app.ui.palette_open = !app.ui.palette_open;
+            Ok(Value::Null)
+        }
+        "pdn.importPdf" => match params.get("path").and_then(Value::as_str) {
+            Some(path) => crate::pdn::pdf::begin_import(path),
+            None => app.pick_file_bytes_filtered(&["pdf"], |_, name, _| crate::pdn::pdf::begin_import(&name)),
+        },
+        "pdn.addRef" => match params.get("path").and_then(Value::as_str) {
+            Some(path) => {
+                let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
+                crate::pdn::refs::add(app, path.to_string(), bytes);
+                Ok(Value::Null)
+            }
+            None => app.pick_file_bytes_filtered(&["png", "jpg", "jpeg", "bmp", "gif", "webp", "tif", "tiff"], |app, name, bytes| {
+                crate::pdn::refs::add(app, name, bytes);
+                Ok(Value::Null)
+            }),
+        },
+        "pdn.toggleRefs" => {
+            crate::pdn::refs::toggle_visible();
+            Ok(Value::Null)
+        }
+        "pdn.bench" => {
+            crate::pdn::bench::toggle();
+            Ok(Value::Null)
+        }
+        "pdn.pdfPages" => {
+            crate::pdn::pdf::set_pages_open(!crate::pdn::pdf::pages_open());
+            Ok(Value::Null)
+        }
+        "pdn.exportPdf" => {
+            crate::pdn::pdf::begin_export();
+            Ok(Value::Null)
+        }
+        "pdn.glow" => {
+            let layer = app.session.active().and_then(|st| st.active_layer).ok_or("No layer is selected")?;
+            crate::pdn::glow::open(ctx, layer.0);
+            Ok(Value::Null)
+        }
+        "pdn.layerProperties" => {
+            let layer = app.session.active().and_then(|st| st.active_layer).ok_or("No layer is selected")?;
+            crate::pdn::layer_props::open(ctx, layer.0);
             Ok(Value::Null)
         }
         "help.about" => Ok(json!({"dialog": app.ui.open_dialog(DialogKind::About, Default::default())})),
@@ -743,6 +804,9 @@ pub fn is_enabled(app: &PhotocraftApp, id: &str) -> bool {
         return e;
     }
     match id {
+        "pdn.importPdf" | "pdn.pdfPages" | "pdn.toggleRefs" | "pdn.bench" => true,
+        "pdn.addRef" => app.session.active().is_some(),
+        "pdn.layerProperties" | "pdn.glow" | "pdn.exportPdf" => app.session.active().is_some_and(|st| st.active_layer.is_some()),
         "window.panel.activate" | "window.panel.layout" => true,
         "window.panel.group" | "window.panel.move" | "window.panel.float" | "window.panel.dock" | "window.panel.close" => !app.session.prefs().workspace_locked,
         "file.open" | "file.exit" | "file.clearRecent" | "file.removeRecent" | "help.about" | "help.systemInfo" | "edit.search" => true,
@@ -800,7 +864,7 @@ pub fn is_enabled(app: &PhotocraftApp, id: &str) -> bool {
 const MODE_CHECKS: [&str; 11] = ["rgb", "grayscale", "cmyk", "lab", "multichannel", "indexedColor", "bitmap", "duotone", "bits8", "bits16", "bits32"];
 
 /// Is a UI-level panel toggle currently on (for checkmarks)?
-fn checked(app: &PhotocraftApp, id: &str) -> Option<bool> {
+pub(crate) fn checked(app: &PhotocraftApp, id: &str) -> Option<bool> {
     if let Some(checked) = crate::panel_docking::checked(app, id) {
         return Some(checked);
     }
@@ -808,6 +872,9 @@ fn checked(app: &PhotocraftApp, id: &str) -> Option<bool> {
     if let Some(name) = id.strip_prefix("window.theme.").filter(|n| *n != "toggle") {
         let auto = app.session.prefs().interface.appearance_mode == photocraft_engine::prefs::AppearanceMode::Auto;
         return Some(if name == "system" { auto } else { !auto && crate::theme::ThemeKind::from_name(name) == Some(app.ui.theme) });
+    }
+    if id == "pdn.toggleRefs" {
+        return Some(crate::pdn::refs::visible());
     }
     if let Some(c) = crate::view_cmds::checked(app, id) {
         return Some(c);
@@ -901,8 +968,8 @@ pub(crate) fn reveal_label() -> &'static str {
 /// Translate the fixed command label and substitute the currently configured export format.
 /// Reuse the existing translated PNG sentence, so dynamic formats work in every UI language.
 fn translated_menu_label(lang: crate::i18n::Lang, item: &MenuItem) -> String {
-    // A document's name is shown as it is.
-    if item.id.starts_with(DOCUMENT_ITEM) {
+    // A document's name is shown as it is; so are Paint.NET's menus, already in the UI language.
+    if item.id.starts_with(DOCUMENT_ITEM) || crate::pdn::active() {
         return item.label.clone();
     }
     if item.id == "file.export.quickExportAsPng"
@@ -957,6 +1024,9 @@ const PLACE_AFTER: &[(&str, &str)] = &[
 ];
 
 pub fn menu_items(app: &PhotocraftApp) -> Vec<MenuItem> {
+    if app.ui.theme.is_paint_net() {
+        return crate::pdn::menu::items(app);
+    }
     // 1) Photoshop's full menu tree, in Photoshop order; live where we implement the command.
     let known = is_live;
     let mut items: Vec<MenuItem> = crate::menu_catalog::CATALOG
@@ -1180,11 +1250,24 @@ pub fn menu_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> f32 {
             let ui = mirrored.as_mut().unwrap_or(ui);
             ui.spacing_mut().button_padding = egui::vec2(6.0, 3.0);
             nav.bar_bottom = Some(ui.max_rect().bottom());
-            let mut buttons = Vec::with_capacity(TOP_MENUS.len());
-            for top in TOP_MENUS {
+            let pdn = t.kind.is_paint_net();
+            let tops: Vec<&str> = if pdn { crate::pdn::menu::TOPS.iter().map(|m| m.key).collect() } else { TOP_MENUS.to_vec() };
+            let ink = if pdn { t.text } else { t.text_dim };
+            if pdn {
+                let v = &mut ui.style_mut().visuals;
+                v.widgets.hovered.weak_bg_fill = egui::Color32::from_white_alpha(80);
+                v.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, ink);
+                v.widgets.active.weak_bg_fill = egui::Color32::from_white_alpha(120);
+                v.widgets.active.fg_stroke = egui::Stroke::new(1.0, ink);
+                v.widgets.open.weak_bg_fill = egui::Color32::from_white_alpha(120);
+                v.widgets.open.fg_stroke = egui::Stroke::new(1.0, ink);
+            }
+            let mut buttons = Vec::with_capacity(tops.len());
+            for top in tops {
                 // egui's menu_button toggles on release; these titles open on the press (one
                 // gesture can press, drag to an item and release), so each drives its popup.
-                let title = ui.add(egui::Button::new(egui::RichText::new(crate::i18n::tr(lang, top)).color(t.text_dim)));
+                let title_text = if pdn { crate::pdn::menu::top_label(top) } else { crate::i18n::tr(lang, top).to_string() };
+                let title = ui.add(egui::Button::new(egui::RichText::new(title_text).color(ink)));
                 // The bar's close behaviour and style, as a menu (not bar) config so submenus inside
                 // render as submenus.
                 let bar = egui::containers::menu::MenuConfig::find(ui);

@@ -150,6 +150,7 @@ pub fn reset_options(o: &mut ToolOptions, tool: Tool) {
         Tool::PaintBucket => reset!(bucket_fill_pattern, fill_opacity, tolerance, anti_alias, contiguous, sample_all_layers),
         Tool::Type | Tool::VerticalType | Tool::HorizontalTypeMask | Tool::VerticalTypeMask => reset!(type_font, type_style, type_size, type_aa, type_align),
         Tool::Zoom => reset!(zoom_scrubby),
+        Tool::Glow => reset!(glow_mode, glow_size, glow_strength),
         Tool::SpotHealing => reset!(spot_type, sample_all_layers),
         Tool::Healing => reset!(clone_aligned, clone_sample),
         Tool::Patch => reset!(patch_mode, patch_content_aware, patch_structure, patch_color, sample_all_layers),

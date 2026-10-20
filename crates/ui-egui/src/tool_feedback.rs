@@ -71,14 +71,19 @@ pub fn selection_mode(tool: Tool, bar: u8, m: egui::Modifiers) -> &'static str {
             }
         }
         _ => {
-            if m.shift && m.alt {
+            // Paint.NET: the right button inverts (Alt: intersects); Ctrl adds, as Shift does.
+            if crate::pdn::right_select() {
+                return if m.alt { "intersect" } else { "xor" };
+            }
+            let add = m.shift || (crate::pdn::active() && m.command);
+            if add && m.alt {
                 "intersect"
-            } else if m.shift {
+            } else if add {
                 "add"
             } else if m.alt {
                 "subtract"
             } else {
-                ["replace", "add", "subtract", "intersect"][bar.min(3) as usize]
+                ["replace", "add", "subtract", "intersect", "xor"][bar.min(4) as usize]
             }
         }
     }

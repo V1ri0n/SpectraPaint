@@ -11,6 +11,8 @@ next to them.
 | Path | Title | Author | Source | License |
 |---|---|---|---|---|
 | `crates/codecs/src/codecs/xpm/x11_colors.rs` | X11 `rgb.txt` color-name lookup table (normalized X.Org RGB values) | X.Org Foundation and X11 contributors | <https://cgit.freedesktop.org/xorg/app/rgb/tree/rgb.txt> | MIT (X.Org app/rgb) |
+| `assets/pdn/*.svg` | Paint.NET-style colour icons for the Paint.NET layout (`crates/ui-egui/src/pdn`) | Own drawings of this fork (generator script `gen_icons.py`) | Original artwork, not copied from Paint.NET | MIT OR Apache-2.0 |
+| `vendor/egui-wgpu/` | egui-wgpu 0.36.2 with one change (texture sampling by `textureLoad` on a software rasterizer, see `vendor/egui-wgpu/PATCH.md`) | Nils Hasenbanck, embotech, Emil Ernerfeldt and egui contributors | <https://github.com/emilk/egui/tree/main/crates/egui-wgpu> | MIT OR Apache-2.0 |
 | `crates/ui-egui/src/i18n/el.tsv` | Greek UI translations | PhotoCraft contributors | Original translations of PhotoCraft's English labels | MIT OR Apache-2.0, [`LICENSE-translations.txt`](crates/ui-egui/src/i18n/LICENSE-translations.txt) |
 | `crates/ui-egui/src/i18n/de.tsv` | German UI translations | PhotoCraft contributors | Original translations of PhotoCraft's English labels | MIT OR Apache-2.0, [`LICENSE-translations.txt`](crates/ui-egui/src/i18n/LICENSE-translations.txt) |
 | `crates/ui-egui/src/i18n/it.tsv` | Italian UI translations | PhotoCraft contributors | Original translations of PhotoCraft's English labels | MIT OR Apache-2.0, [`LICENSE-translations.txt`](crates/ui-egui/src/i18n/LICENSE-translations.txt) |

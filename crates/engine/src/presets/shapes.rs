@@ -150,6 +150,21 @@ fn star(n: usize, ratio: f64, rot: f64) -> String {
     s + "Z"
 }
 
+/// A cog: eight trapezoid teeth around a body, with a round hole.
+fn gear() -> String {
+    let mut s = String::new();
+    let teeth = 8;
+    let mut first = true;
+    for k in 0..teeth {
+        let a = std::f64::consts::TAU * k as f64 / teeth as f64;
+        for (da, r) in [(-0.30, 38.0), (-0.17, 50.0), (0.17, 50.0), (0.30, 38.0)] {
+            s += &format!("{} {:.3} {:.3} ", if first { "M" } else { "L" }, 50.0 + r * (a + da).cos(), 50.0 + r * (a + da).sin());
+            first = false;
+        }
+    }
+    s + "Z ! O 50 50 15"
+}
+
 fn sun() -> String {
     let mut s = "O 50 50 22 ".to_string();
     for k in 0..12 {
@@ -194,6 +209,9 @@ pub fn builtin() -> Vec<Group<ShapePreset>> {
             mk(vec![
                 ("Heart", s("M 50 92 C 20 70 0 52 0 30 C 0 12 14 0 28 0 C 40 0 47 8 50 16 C 53 8 60 0 72 0 C 86 0 100 12 100 30 C 100 52 80 70 50 92 Z")),
                 ("Star", star(5, 0.4, 0.0)),
+                ("Four-Point Star", star(4, 0.38, 0.0)),
+                ("Three-Point Star", star(3, 0.42, 0.0)),
+                ("Gear", gear()),
                 ("Six-Point Star", star(6, 0.55, 0.0)),
                 ("Burst", star(16, 0.72, 0.0)),
                 ("Check Mark", s("M 5 55 L 20 40 L 38 58 L 82 12 L 97 27 L 38 88 Z")),
@@ -212,6 +230,7 @@ pub fn builtin() -> Vec<Group<ShapePreset>> {
                 ("Arrow Up", s("M 35 100 L 35 45 L 15 45 L 50 0 L 85 45 L 65 45 L 65 100 Z")),
                 ("Arrow Down", s("M 35 0 L 35 55 L 15 55 L 50 100 L 85 55 L 65 55 L 65 0 Z")),
                 ("Double Arrow", s("M 0 50 L 25 20 L 25 38 L 75 38 L 75 20 L 100 50 L 75 80 L 75 62 L 25 62 L 25 80 Z")),
+                ("Pentagon Arrow", s("M 0 22 L 62 22 L 100 50 L 62 78 L 0 78 Z")),
                 ("Chevron", s("M 10 0 L 45 0 L 95 50 L 45 100 L 10 100 L 60 50 Z")),
                 ("Curved Arrow", s("M 8 92 C 8 45 35 22 68 22 L 68 4 L 98 34 L 68 64 L 68 44 C 48 44 30 58 30 92 Z")),
             ]),
@@ -225,6 +244,7 @@ pub fn builtin() -> Vec<Group<ShapePreset>> {
                         "M 15 5 L 85 5 C 93 5 100 12 100 20 L 100 60 C 100 68 93 75 85 75 L 45 75 L 20 98 L 25 75 L 15 75 C 7 75 0 68 0 60 L 0 20 C 0 12 7 5 15 5 Z",
                     ),
                 ),
+                ("Rectangular Callout", s("M 0 5 L 100 5 L 100 70 L 40 70 L 18 98 L 22 70 L 0 70 Z")),
                 ("Round Bubble", s("M 50 5 C 78 5 100 22 100 42 C 100 62 78 79 50 79 C 44 79 38 78 33 77 L 12 95 L 18 72 C 7 65 0 54 0 42 C 0 22 22 5 50 5 Z")),
                 ("Thought Bubble", s("M 50 5 C 78 5 100 20 100 38 C 100 56 78 71 50 71 C 22 71 0 56 0 38 C 0 20 22 5 50 5 Z O 22 82 8 O 9 95 5")),
                 ("Shout Bubble", shout()),

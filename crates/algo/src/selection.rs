@@ -21,6 +21,8 @@ pub enum SelectionMode {
     Add,
     Subtract,
     Intersect,
+    /// What is in one but not in both (Paint.NET's Invert mode).
+    Xor,
 }
 
 impl SelectionMode {
@@ -30,6 +32,7 @@ impl SelectionMode {
             "add" => SelectionMode::Add,
             "subtract" => SelectionMode::Subtract,
             "intersect" => SelectionMode::Intersect,
+            "xor" | "exclude" => SelectionMode::Xor,
             _ => SelectionMode::Replace,
         }
     }
@@ -397,8 +400,12 @@ pub fn combine_region(old: Option<&Surface>, new: Option<&Region>, mode: Selecti
     };
     let nonempty = |s: Surface| -> Option<Surface> { (!s.content_bounds().is_empty()).then_some(s) };
     match (mode, old) {
-        (SelectionMode::Replace, _) | (SelectionMode::Add, None) => from_bytes(&new.mask),
+        (SelectionMode::Replace, _) | (SelectionMode::Add | SelectionMode::Xor, None) => from_bytes(&new.mask),
         (SelectionMode::Subtract | SelectionMode::Intersect, None) => None,
+        (SelectionMode::Xor, Some(o)) => {
+            let p = prev_u8(o);
+            from_bytes(&p.iter().zip(&new.mask).map(|(a, b)| a.abs_diff(*b)).collect::<Vec<_>>())
+        }
         (SelectionMode::Intersect, Some(o)) => {
             let p = prev_u8(o);
             from_bytes(&p.iter().zip(&new.mask).map(|(a, b)| *a.min(b)).collect::<Vec<_>>())

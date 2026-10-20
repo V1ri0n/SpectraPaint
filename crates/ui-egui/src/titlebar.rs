@@ -217,11 +217,11 @@ fn caption_id(c: Caption) -> Id {
     Id::new(("titlebar-caption", c as u8))
 }
 
-fn maximized(ctx: &egui::Context) -> bool {
+pub(crate) fn maximized(ctx: &egui::Context) -> bool {
     ctx.input(|i| i.viewport().maximized.unwrap_or(false))
 }
 
-fn toggle_maximize(ctx: &egui::Context) {
+pub(crate) fn toggle_maximize(ctx: &egui::Context) {
     ctx.send_viewport_cmd(ViewportCommand::Maximized(!maximized(ctx)));
 }
 

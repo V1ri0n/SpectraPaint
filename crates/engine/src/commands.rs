@@ -556,6 +556,7 @@ fn build() -> Vec<CommandSpec> {
                         ("add", Some(o)) => sel::combine_surfaces(&o, &shape, area, |a, b| a.max(b)),
                         ("subtract", Some(o)) => sel::combine_surfaces(&o, &shape, area, |a, b| a * (1.0 - b)),
                         ("intersect", Some(o)) => sel::combine_surfaces(&o, &shape, area, |a, b| a.min(b)),
+                        ("xor", Some(o)) => sel::combine_surfaces(&o, &shape, area, |a, b| (a - b).abs()),
                         // With no existing selection, neither operation can select new pixels.
                         ("subtract" | "intersect", None) => Surface::new(photocraft_color::PixelFormat::GRAY8),
                         _ => shape,
