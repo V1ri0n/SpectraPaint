@@ -29,6 +29,8 @@ mod finite;
 pub mod manifest;
 mod migrate;
 pub mod read;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod snapshots;
 mod store;
 pub mod zip;
 

@@ -2287,6 +2287,11 @@
 	Ask before saving layered tiff	Спрашивать перед сохранением многослойного TIFF
 	Autosave	Автосохранение
 	Autosave minutes	Интервал автосохранения (мин)
+	Snapshots	Снимки работы
+	Snapshot minutes	Снимок каждые (мин)
+	Snapshot count	Сколько снимков хранить
+	Snapshot folder	Папка снимков (пусто — по умолчанию)
+	Work snapshots are copies of a document with unsaved changes, taken every few minutes. File › Work Snapshots opens one as a new document.	Снимки работы — копии документа с несохранёнными правками, которые делаются каждые несколько минут. «Файл › Снимки работы» открывает любой из них как новый документ.
 	Beep when done	Звуковой сигнал по завершении
 	Bicubic automatic	Автоматическая бикубическая
 	Bicubic sharper	Бикубическая с повышением резкости

@@ -38,6 +38,7 @@ pub(crate) const TOPS: &[Top] = &[
             Item("file.saveAs", "Сохранить как...", "Save As..."),
             Item("file.saveACopy", "Сохранить копию...", "Save a Copy..."),
             Item("file.revert", "Вернуть к сохранённому", "Revert"),
+            Item("pdn.snapshots", "Снимки работы...", "Work Snapshots..."),
             Sep,
             Sub(
                 "Экспорт",

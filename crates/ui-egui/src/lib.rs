@@ -173,6 +173,7 @@ mod scrub_wrap;
 pub mod select_mask_view;
 pub mod served_fonts;
 pub mod shape_dialog;
+pub mod snapshots_ui;
 pub(crate) mod shape_fill_ui;
 pub mod shape_stroke_ui;
 pub mod shortcut_dispatch;
@@ -452,6 +453,8 @@ pub struct Services {
     pub adopt_autosave: Option<AdoptAutosaveFn>,
     /// History Log text file output.
     pub append_text: Option<AppendTextFn>,
+    /// The folder work snapshots go to unless Preferences name another (desktop; `None` on the web).
+    pub snapshot_dir: Option<std::path::PathBuf>,
     /// OS requests (macOS open-documents / quit Apple events), polled every frame.
     pub os_events: Option<OsEventsFn>,
     /// The pointer position read from the OS (desktop): winit 0.30's file drops carry none, and

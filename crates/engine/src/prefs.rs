@@ -519,6 +519,16 @@ pub struct FileHandling {
     pub autosave_minutes: u32,
     /// Offer to reopen recovered documents at launch.
     pub recover_on_launch: bool,
+    /// Keep work snapshots: whole copies of a document with unsaved changes, taken every
+    /// `snapshot_minutes` and kept `snapshot_count` deep, to open an earlier state (File ›
+    /// Work Snapshots).
+    pub snapshots: bool,
+    /// Minutes between snapshots.
+    pub snapshot_minutes: u32,
+    /// Snapshots kept per document; older ones are deleted.
+    pub snapshot_count: u32,
+    /// Where snapshots are kept; empty is the program's own folder.
+    pub snapshot_folder: String,
     /// Open a file with no ICC profile as untagged even when its EXIF ColorSpace tag says sRGB.
     pub ignore_exif_profile_tag: bool,
     pub ask_before_saving_layered_tiff: bool,
@@ -539,6 +549,10 @@ impl Default for FileHandling {
             autosave: true,
             autosave_minutes: 10,
             recover_on_launch: true,
+            snapshots: true,
+            snapshot_minutes: 5,
+            snapshot_count: 20,
+            snapshot_folder: String::new(),
             ignore_exif_profile_tag: false,
             ask_before_saving_layered_tiff: true,
             maximize_psd_compatibility: Ask::Always,
@@ -1132,6 +1146,8 @@ pub fn choices(path: &str) -> Option<&'static [&'static str]> {
 pub fn range(path: &str) -> Option<(f64, f64)> {
     Some(match path {
         "fileHandling.autosaveMinutes" => (1.0, 240.0),
+        "fileHandling.snapshotMinutes" => (1.0, 240.0),
+        "fileHandling.snapshotCount" => (1.0, 200.0),
         "fileHandling.recentFileCount" => (0.0, 100.0),
         "fileHandling.rasterizeSvgGroupsDeeperThan" => (0.0, photocraft_doc::MAX_GROUP_DEPTH as f64),
         "interface.notificationDurationSeconds" => (1.0, 120.0),

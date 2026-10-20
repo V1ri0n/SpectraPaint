@@ -53,6 +53,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &Context) {
     super::new_image::show(app, ctx);
     super::glow::show(app, ctx);
     super::bench::show(app, ctx);
+    crate::snapshots_ui::show(app, ctx);
     super::pdf::show(app, ctx);
     // The main window has settled where it will be after its first moments.
     if !embed(ctx) && ctx.input(|i| i.time) < 1.2 {

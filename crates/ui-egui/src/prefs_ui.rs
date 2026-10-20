@@ -40,6 +40,8 @@ pub struct Runtime {
     recovery_queue: VecDeque<crate::Recoverable>,
     recovery_pending: Option<(JobId, String)>,
     log_len: usize,
+    /// Work snapshots (see `snapshots_ui`).
+    pub(crate) snapshots: crate::snapshots_ui::State,
     /// Snapping state of the drag in progress (see `snap_ui`).
     pub(crate) snap: Option<crate::snap_ui::ActiveSnap>,
     pub(crate) snap_lines: Vec<SnapLine>,
@@ -443,6 +445,7 @@ pub fn tick(app: &mut PhotocraftApp, ctx: &egui::Context) {
         app.prefs_rt.gpu_style = Some(style);
     }
     autosave(app);
+    crate::snapshots_ui::tick(app);
     #[cfg(not(target_arch = "wasm32"))]
     link_updates(app, ctx);
     history_log(app);
@@ -1208,6 +1211,7 @@ fn prefs_body(ui: &mut egui::Ui, f: &mut Map<String, Value>, system: Option<egui
                 } else if let Some(obj) = values.get_mut(&section).and_then(Value::as_object_mut) {
                     section_fields(ui, &section, obj, &order, lang, system, filter);
                     if section == "fileHandling" {
+                        ui.label(RichText::new(tl!("Work snapshots are copies of a document with unsaved changes, taken every few minutes. File › Work Snapshots opens one as a new document.")).color(t.text_faint));
                         ui.label(
                             RichText::new(tl!("0 turns this threshold off; SVG groups nested deeper than 100 levels are always rasterized."))
                                 .color(t.text_faint),

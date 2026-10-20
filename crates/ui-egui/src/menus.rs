@@ -101,6 +101,7 @@ pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
     ("pdn.exportPdf", "Export to PDF…", &[], None),
     ("pdn.pdfPages", "PDF Pages", &[], None),
     ("pdn.bench", "Performance Check…", &[], None),
+    ("pdn.snapshots", "Work Snapshots…", &[], None),
     ("pdn.addRef", "Add Reference…", &[], None),
     ("pdn.toggleRefs", "Show References", &[], None),
     ("help.discord", "Join the ArtCraft Discord…", &["Help"], None),
@@ -450,6 +451,10 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
         }
         "pdn.bench" => {
             crate::pdn::bench::toggle();
+            Ok(Value::Null)
+        }
+        "pdn.snapshots" => {
+            crate::snapshots_ui::toggle(app);
             Ok(Value::Null)
         }
         "pdn.pdfPages" => {
@@ -804,7 +809,7 @@ pub fn is_enabled(app: &PhotocraftApp, id: &str) -> bool {
         return e;
     }
     match id {
-        "pdn.importPdf" | "pdn.pdfPages" | "pdn.toggleRefs" | "pdn.bench" => true,
+        "pdn.importPdf" | "pdn.pdfPages" | "pdn.toggleRefs" | "pdn.bench" | "pdn.snapshots" => true,
         "pdn.addRef" => app.session.active().is_some(),
         "pdn.layerProperties" | "pdn.glow" | "pdn.exportPdf" => app.session.active().is_some_and(|st| st.active_layer.is_some()),
         "window.panel.activate" | "window.panel.layout" => true,
