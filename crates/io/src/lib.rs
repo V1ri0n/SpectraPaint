@@ -52,6 +52,7 @@ mod ora;
 pub use ora::losses as ora_losses;
 pub mod pattern_map;
 mod pdn;
+pub use pdn::losses as pdn_losses;
 pub mod pixels;
 mod psd_export;
 mod psd_import;
@@ -379,7 +380,7 @@ const PSD_MODEL_DONE: f32 = 0.9;
 fn export_stages(doc: &Document, name_or_ext: &str, opts: &ExportOptions, ctl: &photocraft_raster::Interrupt) -> Result<ExportResult, IoError> {
     let ext = extension(name_or_ext);
     if ext == "pdn" {
-        return Err(IoError::Unsupported("PDN is import-only; save as .pcraft to preserve all layers and blend modes".into()));
+        return pdn::export(doc, ctl);
     }
     if affinity::EXTENSIONS.contains(&ext.as_str()) {
         return Err(IoError::Unsupported("Affinity export is not implemented; save a new PSD, PNG or .pcraft copy".into()));

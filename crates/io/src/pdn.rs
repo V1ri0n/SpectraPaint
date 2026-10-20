@@ -1,9 +1,16 @@
-//! Native, import-only PDN3 reader. Layout reference: addisonElliott/pypdn's reader;
-//! NRBF records follow Microsoft's public MS-NRBF specification (see `nrbf`).
+//! Native PDN3 (Paint.NET) reader and writer. Layout reference: addisonElliott/pypdn's reader and
+//! files written by Paint.NET 4.21; NRBF records follow Microsoft's public MS-NRBF specification
+//! (see `nrbf`). The writer is in `write`.
 
 mod nrbf;
 #[cfg(test)]
 mod tests;
+mod write;
+#[cfg(test)]
+mod write_tests;
+
+pub(crate) use write::export;
+pub use write::losses;
 
 use std::collections::HashMap;
 use std::io::Read;
@@ -237,5 +244,5 @@ pub(super) fn import(name: &str, bytes: &[u8], ctl: &Interrupt<'_>) -> Result<Im
     {
         warnings.push("Paint.NET document metadata was not imported".into());
     }
-    Ok(ImportResult { document, warnings, source_read_only: true, preview_only: false })
+    Ok(ImportResult { document, warnings, source_read_only: false, preview_only: false })
 }

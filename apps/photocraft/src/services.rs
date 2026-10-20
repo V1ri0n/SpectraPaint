@@ -43,6 +43,7 @@ fn open_filters() -> Vec<(&'static str, Vec<String>)> {
         ("All Formats", open_filter_extensions(OPEN_EXTS)),
         ("PhotoCraft", open_filter_extensions(&["pcraft"])),
         ("OpenRaster", open_filter_extensions(&["ora"])),
+        ("Paint.NET", open_filter_extensions(&["pdn"])),
         ("Krita", open_filter_extensions(&["kra", "krz"])),
         ("SVG", open_filter_extensions(SVG_EXTS)),
     ]
@@ -55,6 +56,7 @@ const SAVE_FILTERS: &[(&str, &[&str])] = &[
     ("PSD Document", &["psd", "psb"]),
     ("PhotoCraft", &["pcraft"]),
     ("OpenRaster", &["ora"]),
+    ("Paint.NET", &["pdn"]),
     ("PNG", &["png"]),
     ("JPEG", &["jpg"]),
     ("WebP", &["webp"]),
@@ -742,7 +744,7 @@ mod tests {
     /// Every flat format Save As offers is one PhotoCraft writes, and ICO is among them (#4357).
     #[test]
     fn save_as_offers_only_writable_formats_including_ico() {
-        let layered = ["psd", "psb", "pcraft", "ora"];
+        let layered = ["psd", "psb", "pcraft", "ora", "pdn"];
         for (name, exts) in SAVE_FILTERS {
             for ext in exts.iter().filter(|e| !layered.contains(e)) {
                 let format = photocraft_codecs::from_extension(ext).unwrap_or_else(|| panic!("{name}: .{ext} is no known format"));

@@ -1306,18 +1306,20 @@ impl PhotocraftApp {
             return self.save_to(path, tga_bits);
         }
         let st = self.session.active().ok_or("no document")?;
-        // PDN imports default to our native format, which preserves Paint.NET's blend modes;
-        // Krita imports to OpenRaster, which Krita opens with its layers.
+        // A Paint.NET file is saved back as one while it holds the whole document, else the
+        // suggestion is our native format; Krita imports to OpenRaster, which Krita opens with
+        // its layers.
         // Other files keep their format only when it can retain their layers. A plain raster
         // (including an unlocked transparent PNG) can keep its flat format; editable contents,
         // masks and layer appearance settings need a layered format even with just one layer.
         let flat = plain_raster(&st.doc).is_some();
         let ext = st.path.as_deref().and_then(|p| std::path::Path::new(p).extension()).map(|e| e.to_string_lossy().to_ascii_lowercase());
-        // An OpenRaster file only when it holds the whole document (#3806): else PSD is offered.
-        let holds_ora = st.path.as_deref().is_some_and(|p| photocraft_engine::file_cmds::holds_at(&st.doc, p));
+        // An OpenRaster or Paint.NET file only when it holds the whole document (#3806): else
+        // PSD (or .pcraft) is offered.
+        let holds_lossy = st.path.as_deref().is_some_and(|p| photocraft_engine::file_cmds::holds_at(&st.doc, p));
         let writable = ext.is_some_and(|e| {
             matches!(e.as_str(), photocraft_format::EXTENSION | "psd" | "psb" | "tif" | "tiff")
-                || (e == "ora" && holds_ora)
+                || (matches!(e.as_str(), "ora" | "pdn") && holds_lossy)
                 || (flat && photocraft_codecs::from_extension(&e).is_some_and(|f| f.caps().write))
         });
         let suggested = match &st.path {

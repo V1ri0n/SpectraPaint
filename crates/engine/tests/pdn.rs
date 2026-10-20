@@ -8,9 +8,8 @@ fn imported_layers_remain_editable_with_history_and_native_persistence() {
     let path = std::env::var("PDN_TEST_FILE").expect("set PDN_TEST_FILE");
     let mut session = Session::new();
     photocraft_engine::file_cmds::open_bytes_as(&mut session, &path, &std::fs::read(&path).unwrap(), None, Some(path.clone())).unwrap();
-    assert!(session.active().unwrap().source_read_only);
-    assert!(session.active().unwrap().path.is_none());
-    assert!(session.execute("file.save", json!({})).is_err());
+    assert!(!session.active().unwrap().source_read_only);
+    assert_eq!(session.active().unwrap().path.as_deref(), Some(path.as_str()));
     let before = session.active().unwrap().doc.clone();
     let id = before.layers[0].id;
     session.execute("layer.setProps", json!({"layer":id.0,"name":"Edited PDN layer","visible":true,"opacity":0.4,"blend":"Reflect"})).unwrap();

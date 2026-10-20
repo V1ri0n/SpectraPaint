@@ -902,11 +902,11 @@ fn guide_layouts() {
 
 #[test]
 fn only_layered_files_save_in_place() {
-    for path in ["a.psd", "dir/a.PSB", r"C:\w\a.pcraft", "my.dir/a.psd", "a.ora", "dir/A.ORA"] {
+    for path in ["a.psd", "dir/a.PSB", r"C:\w\a.pcraft", "my.dir/a.psd", "a.ora", "dir/A.ORA", "a.pdn", "a.PDN"] {
         assert!(saves_in_place(path), "{path}");
     }
     // Flat formats, no extension, a dotted folder with an extensionless file, a dot file.
-    for path in ["a.png", "a.jpg", "a.pdn", "a.PDN", "a", "my.psd/a", ".psd", "a.", ""] {
+    for path in ["a.png", "a.jpg", "a", "my.psd/a", ".psd", "a.", ""] {
         assert!(!saves_in_place(path), "{path}");
     }
     assert_eq!(extension("dir/Photo.JPEG").as_deref(), Some("jpeg"));
@@ -919,7 +919,7 @@ fn openraster_holds_a_document_only_when_it_drops_nothing() {
     let mut s = session(16, 16, 8);
     s.execute("layer.new.layer", json!({})).unwrap();
     let plain = doc(&s).clone();
-    for p in ["a.psd", "a.psb", "a.pcraft", "a.ora", "A.ORA"] {
+    for p in ["a.psd", "a.psb", "a.pcraft", "a.ora", "A.ORA", "a.pdn"] {
         assert!(holds_at(&plain, p), "{p}");
     }
     for p in ["a.png", "a.tif", "a", ""] {
@@ -931,6 +931,9 @@ fn openraster_holds_a_document_only_when_it_drops_nothing() {
     assert!(holds_at(&adjusted, "a.psd") && !holds_at(&adjusted, "a.ora"));
     assert!(losses_at(&adjusted, "a.ora").iter().any(|l| l.contains("adjustment layers")), "{:?}", losses_at(&adjusted, "a.ora"));
     assert!(losses_at(&adjusted, "a.psd").is_empty());
+    // Paint.NET has no adjustment layers either.
+    assert!(!holds_at(&adjusted, "a.pdn"));
+    assert!(losses_at(&adjusted, "a.pdn").iter().any(|l| l.contains("adjustment layers")), "{:?}", losses_at(&adjusted, "a.pdn"));
 }
 
 #[test]

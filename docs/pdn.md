@@ -1,8 +1,8 @@
 # Paint.NET documents
 
-PhotoCraft opens PDN3 `.pdn` files natively, without Paint.NET, Python, .NET or an external
-converter. File › Open, recent files, drops, the CLI and automation use the shared importer.
-The browser file picker also accepts `.pdn`.
+PhotoCraft opens and saves PDN3 `.pdn` files natively, without Paint.NET, Python, .NET or an
+external converter. File › Open, recent files, drops, the CLI and automation use the shared
+importer and exporter. The browser file picker also accepts `.pdn`.
 
 Each bitmap layer remains editable. Layer order, Unicode names, visibility, opacity and pixel
 alpha are retained. Painting, masks, transforms, reordering, duplication and undo use the same
@@ -12,10 +12,27 @@ separate Paint.NET variants because their edge cases differ. The blend menus sta
 layer that uses one of these six modes lists its own mode after Photoshop's, and other layers don't
 show them.
 
-PDN support is **import only**. Save opens Save As and suggests `.pcraft`, which preserves the
-layers and every blend mode. Exporting as `.pdn` fails with an explanatory error. PSD cannot
-represent six Paint.NET variants; exporting those as PSD reports that their blending was
-changed to Normal. Use `.pcraft` for continued editing, and PNG for a flattened rendering.
+## Saving
+
+File › Save writes a `.pdn` back as a `.pdn` while the file can hold the whole document. A
+Paint.NET layer is a full-canvas 8-bit RGB bitmap with a name, visibility, opacity and one of the
+14 blend modes, so anything else is baked into pixels or left out, and the save is then a copy
+(File › Save opens Save As and suggests `.pcraft`, which keeps everything), with the losses
+listed in the save warnings:
+
+- groups are merged into one layer each, and type, shape, fill and smart-object layers become
+  pixels; layer masks and fill opacity are applied to the pixels;
+- adjustment layers are left out (the merged image keeps their look), layer styles, clipping,
+  vector masks and alpha channels are not saved;
+- blend modes Paint.NET lacks are saved as Normal; 16- and 32-bit documents are reduced to 8-bit;
+- CMYK, Lab and other non-RGB documents are refused: convert to RGB first;
+- XMP/EXIF/text metadata and colour profiles are dropped (print resolution is kept).
+
+The file is what Paint.NET 4.21 writes: the XML header with a 256 px thumbnail, the .NET
+BinaryFormatter object graph with object ids in the serializer's own order, and each layer's BGRA
+pixels as 256 KiB gzip chunks. The graph is checked byte for byte against files Paint.NET wrote
+(1, 2, 3 and 14 layers). PSD cannot represent six Paint.NET variants; exporting those as PSD
+reports that their blending was changed to Normal.
 
 The reader supports PDN3's typed NRBF objects, both numeric and older blend-operation records,
 BGRA32 surfaces with padded rows, shared pixel memory, and gzip or raw numbered pixel chunks.
@@ -29,6 +46,9 @@ is currently omitted; nonempty user metadata produces an import warning. Layer d
 
 Synthetic unit tests exercise every blend mode, names, hidden layers, opacity, alpha, row
 padding, reversed chunks, old/new mode records, native saves, cancellation and malformed data.
+The writer's tests compare its object graph with `io/src/pdn/fixtures/*.nrbf` (cut from the
+MIT-licensed pypdn test files, see the README there), save and reopen documents of 1–17 layers
+and canvases larger than one chunk, and check each loss warning.
 The GPU parity tests include the additional modes. Local real-file checks are opt-in:
 
 ```sh

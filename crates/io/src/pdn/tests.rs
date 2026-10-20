@@ -133,7 +133,7 @@ fn all_pdn_blend_modes_and_layer_properties_import_and_save_natively() {
             let bytes = fixture(&modes, legacy, compressed);
             // Detection must work without an extension too.
             let imported = crate::import("sample", &bytes).unwrap();
-            assert!(imported.source_read_only);
+            assert!(!imported.source_read_only);
             assert!(!imported.preview_only);
             let doc = imported.document;
             assert_eq!(doc.layers.len(), 14);
@@ -282,12 +282,6 @@ fn serialized_counts_depth_and_references_are_bounded() {
         let mut reader = Reader { bytes: &w.0, pos: 0 };
         assert!(nrbf::parse(&mut reader, &Interrupt::NONE).is_err());
     }
-}
-
-#[test]
-fn pdn_export_is_explicitly_unsupported() {
-    let doc = Document::new("x", Size::new(1, 1), ColorMode::Rgb, SampleType::U8);
-    assert!(matches!(crate::export(&doc, "x.pdn", &Default::default()), Err(IoError::Unsupported(_))));
 }
 
 #[test]

@@ -234,7 +234,7 @@ impl Headless {
                     let lost = file_cmds::losses_at(&doc, p);
                     let why = if lost.is_empty() { String::new() } else { format!(" (it can't keep: {})", lost.join("; ")) };
                     return Err(AutomationError::BadRequest(format!(
-                        "pass `path`: without one, only a PSD, PSB, .pcraft or OpenRaster file that holds the whole document is written back, in its own format, so `{p}` was left unchanged{why}"
+                        "pass `path`: without one, only a PSD, PSB, .pcraft, OpenRaster or Paint.NET file that holds the whole document is written back, in its own format, so `{p}` was left unchanged{why}"
                     )));
                 }
                 PathBuf::from(p)
@@ -257,7 +257,7 @@ impl Headless {
             }
         };
         warnings.extend(photocraft_engine::type_extra_cmds::missing_font_warnings(&doc));
-        // A layered document save (PSD, PSB, OpenRaster or .pcraft) that holds the whole document is a
+        // A layered document save (PSD, PSB, OpenRaster, Paint.NET or .pcraft) that holds the whole document is a
         // full write, not a flattened copy: record the current revision as saved so the session
         // stops reporting `dirty`, and make the file the document's path. A flat export (PNG,
         // JPEG, …), or an OpenRaster file that drops part of it, is a copy and leaves both alone
