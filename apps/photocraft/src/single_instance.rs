@@ -72,7 +72,7 @@ pub enum Launch {
 /// What decides whether a launch takes part (see [`skip_reason`]).
 #[derive(Clone, Copy)]
 pub struct LaunchContext<'a> {
-    /// The settings folder is the platform's per-user one (not portable, not an override).
+    /// The settings folder is one user's own (per-user or beside the program), not an override.
     pub per_user_settings: bool,
     /// `--new-instance`.
     pub new_instance_flag: bool,

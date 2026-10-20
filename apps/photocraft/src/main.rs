@@ -270,7 +270,9 @@ fn main() -> eframe::Result {
     let single_instance = {
         let new_instance_env = std::env::var("PHOTOCRAFT_NEW_INSTANCE").ok();
         let context = single_instance::LaunchContext {
-            per_user_settings: app_dirs::current().mode == app_dirs::Mode::Platform,
+            // PhotoCraft-PDN installs per user with its settings beside the program (`portable.txt`), so that
+            // mode is one user's too; only a settings folder forced by the environment is not.
+            per_user_settings: app_dirs::current().mode != app_dirs::Mode::Override,
             new_instance_flag: new_instance,
             new_instance_env: new_instance_env.as_deref(),
             control: control_port.is_some(),
