@@ -3,6 +3,16 @@
 //! the file, and the tools do not see them. Drag one to move it, drag its bottom-right corner to
 //! resize it, double-click to caption it, Delete or the right-click menu to remove it. A document
 //! that has a file keeps its references in a folder of their own, found again on opening it.
+//!
+//! How pictures get in (all end in [`add`], which only queues the bytes; [`settle`] turns them
+//! into textures on the next frame because a texture needs the egui context):
+//! - the `pdn.addRef` menu command (file picker or `path` parameter, in `menus.rs`);
+//! - dragging files from the OS onto the pasteboard, the dark area around the image
+//!   (`file_open::DropTarget::Pasteboard`, which asks [`can_show`] first and otherwise lets the
+//!   file open/place as before).
+//!
+//! Pictures are decoded by [`decode_rgba`]: plain image formats directly, layered documents
+//! (PSD, PDN, OpenRaster…) through the importer's flattened rendering.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -128,14 +138,42 @@ fn save(path: &str, refs: &[Ref]) {
     }
 }
 
-fn make_texture(ctx: &Context, key: &str, id: u64, bytes: &[u8]) -> Option<(TextureHandle, f32)> {
-    let img = photocraft_codecs::decode(bytes).ok()?;
-    let rgba = img.convert(photocraft_codecs::ChannelLayout::Rgba, photocraft_codecs::SampleType::U8);
-    let (w, h) = (rgba.width() as usize, rgba.height() as usize);
-    if w == 0 || h == 0 || rgba.data().len() != w * h * 4 {
+/// Longest side of a layered document's flattened rendering kept as a reference: the picture is
+/// only looked at beside the canvas, and a 24 MP PSD would otherwise cost a huge texture.
+const LAYERED_REFERENCE_SIDE: u32 = 2048;
+
+/// Extensions of layered documents the importer can flatten into a reference.
+const LAYERED: [&str; 6] = ["psd", "psb", "pdn", "ora", "kra", "pcraft"];
+
+/// Whether [`decode_rgba`] is likely to show `bytes` (named `name`), judged cheaply from the
+/// signature or the extension without decoding: the drop handler uses it to decide whether a
+/// dropped file is a reference or should be opened/placed as before.
+pub fn can_show(name: &str, bytes: &[u8]) -> bool {
+    let ext = std::path::Path::new(name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    photocraft_codecs::detect(bytes).is_some() || LAYERED.contains(&ext.as_str())
+}
+
+/// The picture as straight 8-bit RGBA with its size. `name` only supplies the extension that
+/// tells layered documents apart; plain pictures are recognised by their bytes.
+fn decode_rgba(name: &str, bytes: &[u8]) -> Option<(usize, usize, Vec<u8>)> {
+    if let Ok(img) = photocraft_codecs::decode(bytes) {
+        let rgba = img.convert(photocraft_codecs::ChannelLayout::Rgba, photocraft_codecs::SampleType::U8);
+        return Some((rgba.width() as usize, rgba.height() as usize, rgba.data().to_vec()));
+    }
+    // Not a plain picture: a layered document is shown as the flattened image it renders to.
+    let doc = photocraft_io::import(name, bytes).ok()?.document;
+    let t = photocraft_compose::thumbnail(&doc, LAYERED_REFERENCE_SIDE);
+    Some((t.width as usize, t.height as usize, t.pixels))
+}
+
+/// `name` is the file name (its extension picks the importer for layered documents); the saved
+/// copy beside a document is named `<id>.<ext>`, so [`load`] passes that.
+fn make_texture(ctx: &Context, key: &str, id: u64, name: &str, bytes: &[u8]) -> Option<(TextureHandle, f32)> {
+    let (w, h, data) = decode_rgba(name, bytes)?;
+    if w == 0 || h == 0 || data.len() != w * h * 4 {
         return None;
     }
-    let color = egui::ColorImage::from_rgba_unmultiplied([w, h], rgba.data());
+    let color = egui::ColorImage::from_rgba_unmultiplied([w, h], &data);
     Some((ctx.load_texture(format!("reference-{key}-{id}"), color, egui::TextureOptions::LINEAR), h as f32 / w as f32))
 }
 
@@ -146,7 +184,7 @@ fn load(ctx: &Context, key: &str, path: &str, s: &mut Store) {
     let mut list = Vec::new();
     for m in meta {
         let Ok(bytes) = std::fs::read(dir.join(format!("{}.{}", m.id, m.ext))) else { continue };
-        let Some((tex, aspect)) = make_texture(ctx, key, m.id, &bytes) else { continue };
+        let Some((tex, aspect)) = make_texture(ctx, key, m.id, &format!("{}.{}", m.id, m.ext), &bytes) else { continue };
         s.next = s.next.max(m.id + 1);
         list.push(Ref { id: m.id, x: m.x, y: m.y, w: m.w, aspect, caption: m.caption, tex, bytes, ext: m.ext });
     }
@@ -179,7 +217,7 @@ fn settle(app: &PhotocraftApp, ctx: &Context, idx: usize, s: &mut Store) {
         }
         s.next += 1;
         let id = s.next;
-        let Some((tex, aspect)) = make_texture(ctx, &key, id, &bytes) else { continue };
+        let Some((tex, aspect)) = make_texture(ctx, &key, id, &name, &bytes) else { continue };
         let ext = std::path::Path::new(&name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).filter(|e| !e.is_empty()).unwrap_or_else(|| "png".into());
         let list = s.docs.entry(key.clone()).or_default();
         // Beside the canvas on its right, each below the one before.
@@ -464,4 +502,11 @@ pub fn overlays(app: &PhotocraftApp, ctx: &Context, xf: &ViewXform, idx: usize) 
             None => {}
         }
     }
+}
+
+/// How many pictures wait to become references (they turn into textures on the next frame).
+/// For tests of the drop routing, which can't run a frame.
+#[cfg(test)]
+pub(crate) fn pending_len() -> usize {
+    STORE.lock().map_or(0, |s| s.pending.len())
 }

@@ -26,6 +26,10 @@ pub enum OsEvent {
 pub enum DropTarget {
     /// The active document's canvas: placed as layers (Place Embedded), each in Free Transform.
     Canvas,
+    /// The pasteboard: the canvas area outside the image itself. In the Paint.NET shell the files
+    /// become references (`pdn::refs::add`) laid out beside the image; they are not part of the
+    /// document. In other shells the pasteboard behaves like [`DropTarget::Canvas`].
+    Pasteboard,
     /// The tab strip: opened with their tabs from this position (the strip shows it while files
     /// hover).
     Tabs(usize),
@@ -163,14 +167,27 @@ impl PhotocraftApp {
     /// Preset files (brushes, gradients) always go to their libraries. Native drops carry an
     /// absolute path, read in bounded reads (#375) rather than egui's whole-file read.
     pub fn open_dropped(&mut self, ctx: &egui::Context, files: Vec<egui::DroppedFileHandle>, at: Option<egui::Pos2>) {
-        let target = self.drop_target(ctx, at);
+        self.open_dropped_in(ctx, files, at, crate::pdn::active());
+    }
+
+    /// [`Self::open_dropped`] with the Paint.NET layout (`pdn_shell`) given instead of read from
+    /// the process-wide switch, so tests can try both without racing each other.
+    pub(crate) fn open_dropped_in(&mut self, ctx: &egui::Context, files: Vec<egui::DroppedFileHandle>, at: Option<egui::Pos2>, pdn_shell: bool) {
+        let target = self.drop_target_in(ctx, at, pdn_shell);
         let mut slot = match target {
             DropTarget::Tabs(slot) => Some(slot),
-            DropTarget::Canvas | DropTarget::Elsewhere => None,
+            DropTarget::Canvas | DropTarget::Pasteboard | DropTarget::Elsewhere => None,
         };
         for f in files {
             let name = dropped_name(&f);
-            if target == DropTarget::Canvas && !crate::preset_files_ui::is_preset_file(&name) {
+            // Beside the image: a reference. Presets keep their own meaning wherever they land,
+            // and a file that isn't a picture falls through to the usual open/place below
+            // (`add_reference` says whether it took the file).
+            if target == DropTarget::Pasteboard && !crate::preset_files_ui::is_preset_file(&name) && self.add_reference(&f, &name) {
+                continue;
+            }
+            // The pasteboard is part of the canvas for everything a reference didn't take.
+            if matches!(target, DropTarget::Canvas | DropTarget::Pasteboard) && !crate::preset_files_ui::is_preset_file(&name) {
                 self.drop_places.push_back(f);
                 continue;
             }
@@ -184,6 +201,11 @@ impl PhotocraftApp {
 
     /// Where a drop at `at` lands. Over a window or dialog it's neither the canvas nor the tabs.
     pub(crate) fn drop_target(&self, ctx: &egui::Context, at: Option<egui::Pos2>) -> DropTarget {
+        self.drop_target_in(ctx, at, crate::pdn::active())
+    }
+
+    /// [`Self::drop_target`] for an explicit layout; see [`Self::open_dropped_in`].
+    pub(crate) fn drop_target_in(&self, ctx: &egui::Context, at: Option<egui::Pos2>, pdn_shell: bool) -> DropTarget {
         let Some(p) = at.filter(|p| ctx.layer_id_at(*p).is_none_or(|l| l.order == egui::Order::Background)) else {
             return DropTarget::Elsewhere;
         };
@@ -192,9 +214,27 @@ impl PhotocraftApp {
         }
         // The canvas shown last frame may belong to a document closed since.
         if self.session.active().is_some() && self.drop_canvas_rect.is_some_and(|r| r.contains(p)) {
-            return DropTarget::Canvas;
+            // References live only in the Paint.NET shell, and only outside the image itself:
+            // on the image a drop still places a layer, as before.
+            let on_image = self.drop_image_rect.is_none_or(|r| r.contains(p));
+            return if pdn_shell && !on_image { DropTarget::Pasteboard } else { DropTarget::Canvas };
         }
         DropTarget::Elsewhere
+    }
+
+    /// Hand a dropped file to the references (`pdn::refs`) of the active document. False when it
+    /// can't be read or isn't a picture the references can show, so the caller carries on with
+    /// the ordinary drop (open as a document / place as a layer) instead of losing the file.
+    fn add_reference(&mut self, f: &egui::DroppedFileHandle, name: &str) -> bool {
+        let bytes = if f.path().is_absolute() { std::fs::read(f.path()).map_err(|e| e.to_string()) } else { crate::read_dropped(&**f) };
+        let Ok(bytes) = bytes else { return false };
+        // `refs::add` only queues the bytes (the texture needs the egui context next frame), so
+        // check up front that it will be able to show them.
+        if !crate::pdn::refs::can_show(name, &bytes) {
+            return false;
+        }
+        crate::pdn::refs::add(self, name.to_string(), bytes);
+        true
     }
 
     /// Open one dropped file; with `slot`, its tab goes there (when it finishes opening, for

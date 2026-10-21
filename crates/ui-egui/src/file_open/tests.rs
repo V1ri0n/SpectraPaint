@@ -882,3 +882,42 @@ fn opening_type_in_a_missing_font_warns() {
     // The importer's own warning for the same font isn't doubled.
     assert_eq!(app.open_bytes("warned.psd", b"x").unwrap(), vec![warning]);
 }
+
+/// A drop on the dark area round the image (inside the canvas area, outside the image) is a
+/// reference in the Paint.NET layout; on the image it is still a placed layer, and in the other
+/// layouts the whole canvas area places layers as before.
+#[test]
+fn drops_on_the_pasteboard_are_references_only_in_the_paint_net_layout() {
+    let ctx = egui::Context::default();
+    let mut app = app_with_canvas();
+    // The canvas area is (100,50)–(700,550); the image sits in its middle.
+    app.drop_image_rect = Some(egui::Rect::from_min_max(egui::pos2(250.0, 150.0), egui::pos2(550.0, 450.0)));
+    let (on_image, beside) = (egui::pos2(400.0, 300.0), egui::pos2(150.0, 100.0));
+    assert_eq!(app.drop_target_in(&ctx, Some(on_image), true), DropTarget::Canvas);
+    assert_eq!(app.drop_target_in(&ctx, Some(beside), true), DropTarget::Pasteboard);
+    assert_eq!(app.drop_target_in(&ctx, Some(beside), false), DropTarget::Canvas, "no references outside the Paint.NET layout");
+    // Outside the canvas area it is still the tabs/panels' business.
+    assert_eq!(app.drop_target_in(&ctx, Some(egui::pos2(750.0, 300.0)), true), DropTarget::Elsewhere);
+    // Before an image rectangle is known (first frame) the whole area counts as the canvas.
+    app.drop_image_rect = None;
+    assert_eq!(app.drop_target_in(&ctx, Some(beside), true), DropTarget::Canvas);
+}
+
+/// A picture dropped beside the image is queued as a reference and neither opened nor placed;
+/// something that isn't a picture still falls through to the usual open/place.
+#[test]
+fn a_picture_dropped_on_the_pasteboard_becomes_a_reference_and_other_files_still_place() {
+    let ctx = egui::Context::default();
+    let mut app = app_with_canvas();
+    app.drop_image_rect = Some(egui::Rect::from_min_max(egui::pos2(250.0, 150.0), egui::pos2(550.0, 450.0)));
+    let beside = Some(egui::pos2(150.0, 100.0));
+    let (layers, docs, queued) = (layer_count(&app), app.session.documents().len(), crate::pdn::refs::pending_len());
+    app.open_dropped_in(&ctx, vec![dropped("ref.png", Ok(png_bytes(40, 30)))], beside, true);
+    assert_eq!(crate::pdn::refs::pending_len(), queued + 1, "queued for the references");
+    assert_eq!((layer_count(&app), app.session.documents().len()), (layers, docs), "not placed, not opened");
+    assert!(app.drop_places.is_empty());
+    // Not a picture: placed like any canvas drop instead of being swallowed.
+    app.open_dropped_in(&ctx, vec![dropped("notes.xyz", Ok(b"not a picture".to_vec()))], beside, true);
+    assert_eq!(crate::pdn::refs::pending_len(), queued + 1);
+    assert_eq!(app.drop_places.len(), 1);
+}

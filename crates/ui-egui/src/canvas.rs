@@ -1844,6 +1844,8 @@ pub(crate) fn arranged_cells(app: &PhotocraftApp, rect: Rect) -> Option<Vec<(usi
 
 fn documents(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     app.drop_canvas_rect = None;
+    // Both drop rectangles are per frame: set again below once a canvas is actually drawn.
+    app.drop_image_rect = None;
     // Paint.NET's tabs live in its menu row (`pdn::menu_row`).
     if !crate::pdn::active() {
         app.tab_strip = None;
@@ -2451,6 +2453,29 @@ impl TabStrip {
     }
 }
 
+/// While files are dragged over the pasteboard (the canvas area outside the image), shows that
+/// letting go adds them as references: a frame round the area and a caption. The pointer
+/// position during an OS drag comes from `services.cursor_pos` (winit gives no pointer events
+/// then), the same way `drop_slot_line` and the drop itself find it. Paint.NET shell only.
+fn drop_reference_hint(app: &mut PhotocraftApp, ctx: &egui::Context, painter: &egui::Painter, area: Rect, _img: Rect) {
+    if !crate::pdn::active() || ctx.input(|i| i.raw.hovered_files.is_empty()) {
+        return;
+    }
+    let at = app.services.cursor_pos.as_mut().and_then(|f| f(ctx));
+    if app.drop_target(ctx, at) != crate::file_open::DropTarget::Pasteboard {
+        return;
+    }
+    let t = crate::theme::Tokens::get(ctx);
+    painter.rect_stroke(area.shrink(3.0), 0.0, Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
+    let text = if crate::i18n::current().code() == "ru" { "Отпустите, чтобы добавить референс" } else { "Drop to add as a reference" };
+    let galley = painter.layout_no_wrap(text.into(), egui::FontId::proportional(14.0), Color32::WHITE);
+    let pos = egui::pos2(area.center().x - galley.size().x / 2.0, area.top() + 14.0);
+    painter.rect_filled(Rect::from_min_size(pos, galley.size()).expand2(egui::vec2(10.0, 5.0)), 4.0, Color32::from_black_alpha(190));
+    painter.galley(pos, galley, Color32::WHITE);
+    // Frames only come while the drag moves otherwise (lib.rs requests repaints during hover).
+    ctx.request_repaint();
+}
+
 /// While files are dragged over the tab strip, an insertion line where they would open.
 fn drop_slot_line(app: &mut PhotocraftApp, ui: &egui::Ui) {
     if ui.input(|i| i.raw.hovered_files.is_empty()) {
@@ -3016,6 +3041,9 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     };
     let painted = if crop_camera { None } else { Some(paint_canvas(app, ui, &view, xf)) };
     let img_rect = xf.doc_rect(doc.bounds());
+    // Remembered for `file_open::drop_target`: a file dropped outside this rectangle but inside
+    // the canvas area is added as a reference (Paint.NET shell only, see `pdn/refs.rs`).
+    app.drop_image_rect = Some(img_rect);
 
     // Under an open dialog the canvas widget is inert, but the image still pans and zooms.
     let under_dialog = !app.ui.dialogs.is_empty();
@@ -3561,6 +3589,7 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     if crate::pdn::active() {
         crate::pdn::refs::draw(app, &ctx, &painter, &xf, img_rect, idx);
         crate::pdn::refs::overlays(app, &ctx, &xf, idx);
+        drop_reference_hint(app, &ctx, &painter, rect, img_rect);
     }
     if primary && !(hand_pan && response.dragged()) {
         if app.ui.extras.grid && app.ui.view.extras {

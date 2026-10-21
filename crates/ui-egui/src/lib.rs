@@ -606,6 +606,11 @@ pub struct PhotocraftApp {
     /// The document area showing the active document's canvas last frame (not the tabs, the
     /// start screen or an opening file's card): files dropped here are placed as layers.
     pub(crate) drop_canvas_rect: Option<egui::Rect>,
+    /// The image itself (the document's bounds on screen) inside [`Self::drop_canvas_rect`] last
+    /// frame. Where a drop lands on the canvas area but outside this rectangle, i.e. on the dark
+    /// pasteboard around the image, it becomes a reference (`file_open::DropTarget::Pasteboard`,
+    /// `pdn::refs`) instead of a placed layer. Set in `canvas.rs` next to `img_rect`.
+    pub(crate) drop_image_rect: Option<egui::Rect>,
     /// The document tab strip last frame: a drop there opens the file at the slot under it.
     pub(crate) tab_strip: Option<canvas::TabStrip>,
     /// Files dropped on the canvas still to place, one Free Transform at a time.
@@ -806,6 +811,7 @@ impl PhotocraftApp {
             last_canvas_rect: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)),
             ppp: 1.0,
             drop_canvas_rect: None,
+            drop_image_rect: None,
             tab_strip: None,
             drop_places: Default::default(),
             view_docs: Vec::new(),
