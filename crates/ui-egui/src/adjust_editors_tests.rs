@@ -369,7 +369,7 @@ fn color_balance_sliders_reset_and_step_like_photoshop() {
     wheel_at(&mut h, on_track, 3.0, egui::Modifiers::NONE);
     wheel_at(&mut h, on_track, 3.0, egui::Modifiers::SHIFT);
     assert_eq!(cb(&h).1, [40.0, -30.0, 20.0], "wheel over a Properties slider");
-    // Up/Down in the field: 1, Shift: 10 (also below zero, where a half step used to round away).
+    // Up/Down in the field: 1, Shift: 5 (also below zero, where a half step used to round away).
     let field = h
         .query_all_by_role(egui::accesskit::Role::SpinButton)
         .map(|n| n.rect())
@@ -379,14 +379,14 @@ fn color_balance_sliders_reset_and_step_like_photoshop() {
     key_with(&mut h, egui::Key::ArrowUp, egui::Modifiers::NONE);
     assert_eq!(cb(&h).1[0], 41.0, "Up");
     key_with(&mut h, egui::Key::ArrowUp, egui::Modifiers::SHIFT);
-    assert_eq!(cb(&h).1[0], 51.0, "Shift+Up");
-    for _ in 0..8 {
+    assert_eq!(cb(&h).1[0], 46.0, "Shift+Up");
+    for _ in 0..20 {
         key_with(&mut h, egui::Key::ArrowDown, egui::Modifiers::SHIFT);
     }
     key_with(&mut h, egui::Key::ArrowDown, egui::Modifiers::NONE);
-    assert_eq!(cb(&h).1[0], -30.0, "Shift+Down ×8, Down");
+    assert_eq!(cb(&h).1[0], -55.0, "Shift+Down ×20, Down");
     key_with(&mut h, egui::Key::ArrowUp, egui::Modifiers::NONE);
-    assert_eq!(cb(&h).1[0], -29.0, "Up below zero");
+    assert_eq!(cb(&h).1[0], -54.0, "Up below zero");
 }
 
 /// Photoshop 25.4, Color Balance in the Properties panel: edits that follow each other make one

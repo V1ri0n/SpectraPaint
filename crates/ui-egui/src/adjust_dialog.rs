@@ -378,9 +378,9 @@ mod tests {
         input(&mut h, egui::Modifiers::NONE, &[egui::Event::PointerMoved(at), wheel(3.0, egui::Modifiers::NONE)]);
         assert_eq!(field(&h, id, "midtones")[0], json!(3.0), "3 notches up");
         input(&mut h, egui::Modifiers::SHIFT, &[egui::Event::PointerMoved(at), wheel(2.0, egui::Modifiers::SHIFT)]);
-        assert_eq!(field(&h, id, "midtones")[0], json!(23.0), "Shift: 10 per notch");
+        assert_eq!(field(&h, id, "midtones")[0], json!(13.0), "Shift: 5 per notch");
         input(&mut h, egui::Modifiers::CTRL, &[egui::Event::PointerMoved(at), wheel(-1.0, egui::Modifiers::CTRL)]);
-        assert_eq!(field(&h, id, "midtones")[0], json!(22.0), "Ctrl: 1 per notch, down");
+        assert_eq!(field(&h, id, "midtones")[0], json!(12.0), "Ctrl: 1 per notch, down");
         // Alt turns Cancel into Reset.
         assert!(h.query_by_label("Cancel").is_some() && h.query_by_label("Reset").is_none());
         h.state_mut().ui.dialog_mut(id).unwrap().fields.insert("highlights".into(), json!([5, 5, 5]));

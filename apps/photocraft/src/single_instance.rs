@@ -242,7 +242,7 @@ pub fn claim_with(dir: &Path, paths: &[String], timing: Timing) -> Launch {
             }
         }
         if Instant::now() >= deadline {
-            return Launch::Standalone(format!("the running PhotoCraft didn't take the files ({last})"));
+            return Launch::Standalone(format!("the running Spectra Paint didn't take the files ({last})"));
         }
         std::thread::sleep(Duration::from_millis(100));
     }

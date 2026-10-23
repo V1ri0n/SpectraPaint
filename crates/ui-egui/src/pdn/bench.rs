@@ -203,7 +203,7 @@ fn gib(bytes: f64) -> String {
 
 /// The machine: processor, memory, power, and what the program chose to draw with.
 fn describe_system(app: &PhotocraftApp, ctx: &Context, out: &mut Vec<String>, power: &mut Vec<String>) {
-    out.push(format!("Программа: PhotoCraft-PDN {}", env!("CARGO_PKG_VERSION")));
+    out.push(format!("Программа: Spectra Paint-PDN {}", env!("CARGO_PKG_VERSION")));
     out.push(format!("Система: {} {}", std::env::consts::OS, std::env::consts::ARCH));
     let facts = probe_facts();
     if let Some(v) = &facts.windows {
@@ -398,7 +398,7 @@ fn span_label(k: &str) -> &str {
 
 fn build_report(b: &mut Bench) {
     let mut r = Vec::new();
-    r.push("=== PhotoCraft-PDN: проверка производительности ===".to_string());
+    r.push("=== Spectra Paint-PDN: проверка производительности ===".to_string());
     let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
     r.push(format!("Время (UTC): {}", utc(secs)));
     r.push(String::new());
@@ -530,7 +530,7 @@ fn advance(app: &mut PhotocraftApp, ctx: &Context, b: &mut Bench) {
 
 fn desktop_file() -> std::path::PathBuf {
     let dir = std::env::var_os("USERPROFILE").map(|p| std::path::PathBuf::from(p).join("Desktop")).filter(|p| p.is_dir()).unwrap_or_else(std::env::temp_dir);
-    dir.join("PhotoCraft-PDN-benchmark.txt")
+    dir.join("Spectra Paint-PDN-benchmark.txt")
 }
 
 /// Draws the window while it is open, and moves the check along.

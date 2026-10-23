@@ -154,9 +154,9 @@ mod tests {
         arrow(&mut h, egui::Key::ArrowUp, egui::Modifiers::NONE);
         assert_eq!(num(&h, "hue"), 1.0);
         arrow(&mut h, egui::Key::ArrowUp, egui::Modifiers::SHIFT);
-        assert_eq!(num(&h, "hue"), 11.0);
+        assert_eq!(num(&h, "hue"), 6.0);
         arrow(&mut h, egui::Key::ArrowDown, egui::Modifiers::NONE);
-        assert_eq!(num(&h, "hue"), 10.0);
+        assert_eq!(num(&h, "hue"), 5.0);
         // The text stays selected: typing replaces it.
         type_text(&mut h, "-5");
         assert_eq!(num(&h, "hue"), -5.0);
@@ -202,7 +202,7 @@ mod tests {
         h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Tab);
         h.run_steps(2);
         arrow(&mut h, egui::Key::ArrowUp, egui::Modifiers::SHIFT);
-        assert_eq!(fields(&h)["height"].as_u64(), Some(310));
+        assert_eq!(fields(&h)["height"].as_u64(), Some(305));
         // Tab from the last field wraps to the name.
         tab(&mut h);
         tab(&mut h);

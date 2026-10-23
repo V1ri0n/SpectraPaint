@@ -134,8 +134,8 @@ fn caption_row(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         let mark = Rect::from_center_size(pos2(full.left() + 16.0, full.center().y), vec2(u(ui.ctx(), 20.0), u(ui.ctx(), 20.0)));
         crate::brand::paint_mark(ui, mark);
         let title = match app.session.active() {
-            Some(st) => format!("{}{} - PhotoCraft", st.doc.name, if st.is_dirty() { " *" } else { "" }),
-            None => "PhotoCraft".to_string(),
+            Some(st) => format!("{}{} - Spectra Paint", st.doc.name, if st.is_dirty() { " *" } else { "" }),
+            None => "Spectra Paint".to_string(),
         };
         ui.painter().text(pos2(full.left() + 32.0, full.center().y), egui::Align2::LEFT_CENTER, title, crate::theme::medium(13.0), t.text);
         caption_buttons(app, ui, full);

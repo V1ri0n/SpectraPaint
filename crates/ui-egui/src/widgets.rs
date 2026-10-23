@@ -263,6 +263,12 @@ pub fn pill_tab(ui: &mut Ui, label: &str, selected: bool) -> Response {
     resp
 }
 
+/// How many plain steps one Shift step is: Shift + Up/Down in a value field, Shift + wheel over a
+/// field or slider, Shift while scrubbing a label, and Shift + click on a − / + button
+/// (`pdn::options::step_by`) all move the value 5 steps instead of 1 (Photoshop uses 10; the
+/// owner of this fork asked for 5). Change it here to change them all.
+pub const SHIFT_STEPS: f32 = 5.0;
+
 /// Monospace numeric field with a dimmed unit suffix, Photoshop style. Drag to scrub. Typed
 /// arithmetic (`1920/2`) applies on Enter, Tab or click-away, and a unit after a number converts
 /// into the field's unit (`1in` in a px field, at the resolution [`set_field_resolution`] gave).
@@ -382,7 +388,7 @@ struct LabelScrub {
     rect: Rect,
     /// How far right of the label the field may start (the whole row for a slider row).
     max_gap: f32,
-    /// Whole steps to move the value (left negative; Shift ×10, Alt a tenth as fast).
+    /// Whole steps to move the value (left negative; Shift ×[`SHIFT_STEPS`], Alt a tenth as fast).
     steps: f32,
     started: bool,
     dragging: bool,
@@ -394,7 +400,7 @@ fn label_scrub_id() -> egui::Id {
 }
 
 /// Makes `label` scrubby: dragging it left or right moves the value field drawn right after it on
-/// the same row (one step a point, ×10 with Shift, a tenth as fast with Alt), with Photoshop's
+/// the same row (one step a point, ×[`SHIFT_STEPS`] with Shift, a tenth as fast with Alt), with Photoshop's
 /// scrubby cursor. A label with no value field right after it stays a plain label.
 pub fn scrub_label(ui: &Ui, label: &Response) -> Response {
     scrub_label_within(ui, label, 24.0)
@@ -414,7 +420,7 @@ fn scrub_label_within(ui: &Ui, label: &Response, max_gap: f32) -> Response {
         let mut acc: f32 = if resp.drag_started() { 0.0 } else { ui.data(|d| d.get_temp(acc_id)).unwrap_or(0.0) };
         let mods = ui.input(|i| i.modifiers);
         let rate = if mods.shift {
-            10.0
+            SHIFT_STEPS
         } else if mods.alt {
             0.1
         } else {
@@ -803,7 +809,7 @@ fn number_edit(
     resp
 }
 
-/// Increments a numerical field with the up/down arrow keys. Increments by 1 by default, 10 with shift, and 0.1 with ctrl/cmd.
+/// Increments a numerical field with the up/down arrow keys. Increments by 1 by default, [`SHIFT_STEPS`] with shift, and 0.1 with ctrl/cmd.
 /// Returns the amount to add, and what to round the value to first.
 fn arrow_step(ui: &mut Ui, slot: egui::Id, step: f32) -> (f32, f32) {
     use egui::{Key, Modifiers};
@@ -814,7 +820,7 @@ fn arrow_step(ui: &mut Ui, slot: egui::Id, step: f32) -> (f32, f32) {
     let (n, grid) = ui.input_mut(|i| {
         let (mut n, mut grid) = (0.0, step);
         // egui ignores an extra shift when matching, so shift is checked before the plain arrows to get its larger step.
-        for (mods, k) in [(Modifiers::COMMAND, (step / 10.0).max(0.01)), (Modifiers::SHIFT, 10.0 * step), (Modifiers::NONE, step)] {
+        for (mods, k) in [(Modifiers::COMMAND, (step / 10.0).max(0.01)), (Modifiers::SHIFT, SHIFT_STEPS * step), (Modifiers::NONE, step)] {
             let presses = i.count_and_consume_key(mods, Key::ArrowUp) as f32 - i.count_and_consume_key(mods, Key::ArrowDown) as f32;
             if presses != 0.0 && mods == Modifiers::COMMAND {
                 grid = k;
@@ -837,22 +843,22 @@ pub fn slider(ui: &mut Ui, value: &mut f32, range: std::ops::RangeInclusive<f32>
 
 /// Photoshop's gestures on a slider row beyond click and drag, as measured on Color Balance in
 /// Photoshop 25.4 (Image › Adjustments dialog and the adjustment layer's Properties). Shift, Ctrl
-/// and Alt change nothing about clicks, double-clicks or drags; the wheel takes ten steps with
+/// and Alt change nothing about clicks, double-clicks or drags; the wheel takes [`SHIFT_STEPS`] steps with
 /// Shift. (Up/Down in the field are every value field's, see [`value_field`].)
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RowGestures {
     /// A double-click on the slider (knob or track; not the label or field) sets this value.
     pub reset: Option<f32>,
-    /// Each wheel notch over the slider moves the value by this step (up = higher; ×10 with
+    /// Each wheel notch over the slider moves the value by this step (up = higher; ×[`SHIFT_STEPS`] with
     /// Shift). Photoshop does this in dialogs, not in the Properties panel.
     pub wheel_step: Option<f32>,
 }
 
-/// Wheel notches this frame while the pointer is over `resp` (Shift ×10). Wheel lines add up in
+/// Wheel notches this frame while the pointer is over `resp` (Shift ×[`SHIFT_STEPS`]). Wheel lines add up in
 /// egui memory until they make whole notches (high-resolution wheels report fractions of one);
 /// smooth (point) deltas count `line_scroll_speed` points per notch, like the canvas wheel.
 fn wheel_notches(ui: &Ui, resp: &Response) -> f32 {
-    wheel_notches_of(ui, resp.id, resp.hovered(), 10.0)
+    wheel_notches_of(ui, resp.id, resp.hovered(), SHIFT_STEPS)
 }
 
 /// [`wheel_notches`] of widget `id` while `hovered`, a notch with Shift counting `shift_notches`.
@@ -1908,11 +1914,11 @@ mod tests {
     }
 
     #[test]
-    fn arrow_keys_step_a_focused_field_by_one_and_shift_by_ten() {
+    fn arrow_keys_step_a_focused_field_by_one_and_shift_by_five() {
         let mut h = focused(100.0, 0.0..=1000.0);
         assert_eq!(press(&mut h, Modifiers::NONE, Key::ArrowUp), 101.0);
-        assert_eq!(press(&mut h, Modifiers::SHIFT, Key::ArrowUp), 111.0);
-        assert_eq!(press(&mut h, Modifiers::NONE, Key::ArrowDown), 110.0);
+        assert_eq!(press(&mut h, Modifiers::SHIFT, Key::ArrowUp), 106.0);
+        assert_eq!(press(&mut h, Modifiers::NONE, Key::ArrowDown), 105.0);
         assert_eq!(press(&mut h, Modifiers::SHIFT, Key::ArrowDown), 100.0);
         assert_eq!(press(&mut h, Modifiers::COMMAND, Key::ArrowUp), 100.1);
         assert_eq!(press(&mut h, Modifiers::COMMAND | Modifiers::SHIFT, Key::ArrowDown), 100.0);
@@ -1935,15 +1941,15 @@ mod tests {
             (55.4, Modifiers::NONE, Key::ArrowDown, 54.0),
             (55.5, Modifiers::NONE, Key::ArrowUp, 57.0),
             (55.5, Modifiers::NONE, Key::ArrowDown, 55.0),
-            (55.4, Modifiers::SHIFT, Key::ArrowUp, 65.0),
+            (55.4, Modifiers::SHIFT, Key::ArrowUp, 60.0),
             (55.47, Modifiers::COMMAND, Key::ArrowUp, 55.6),
         ] {
             assert_eq!(press(&mut focused(start, 0.0..=1000.0), mods, key), want, "{start} {mods:?} {key:?}");
         }
         let mut h = focused(0.5, 0.0..=1.0);
         assert_eq!(press(&mut h, Modifiers::NONE, Key::ArrowUp), 0.51);
-        assert_eq!(press(&mut h, Modifiers::SHIFT, Key::ArrowUp), 0.61);
-        assert_eq!(press(&mut h, Modifiers::COMMAND, Key::ArrowUp), 0.62);
+        assert_eq!(press(&mut h, Modifiers::SHIFT, Key::ArrowUp), 0.56);
+        assert_eq!(press(&mut h, Modifiers::COMMAND, Key::ArrowUp), 0.57);
         let mut h = focused(995.0, 0.0..=1000.0);
         assert_eq!(press(&mut h, Modifiers::SHIFT, Key::ArrowUp), 1000.0);
     }
@@ -1984,7 +1990,7 @@ mod tests {
     }
 
     /// Photoshop's scrubby labels: dragging the label right before a field moves its value, a
-    /// step a point (Shift ×10); a label with no field right after it moves nothing.
+    /// step a point (Shift ×[`SHIFT_STEPS`]); a label with no field right after it moves nothing.
     #[test]
     fn dragging_a_label_scrubs_the_field_right_after_it() {
         let mut h = Harness::new_ui_state(
@@ -2269,7 +2275,7 @@ mod tests {
     fn shift_wheel_steps_one_mode_per_notch() {
         let mut h = mode_dropdown(true);
         wheel(&mut h, egui::MouseWheelUnit::Line, egui::vec2(0.0, -1.0), Modifiers::SHIFT);
-        assert_eq!(*h.state(), 1, "not ten like a slider");
+        assert_eq!(*h.state(), 1, "not five like a slider");
         // Some systems turn Shift+wheel into a horizontal scroll.
         wheel(&mut h, egui::MouseWheelUnit::Line, egui::vec2(-1.0, 0.0), Modifiers::SHIFT);
         assert_eq!(*h.state(), 2);

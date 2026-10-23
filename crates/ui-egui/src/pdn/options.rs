@@ -7,6 +7,13 @@ use crate::PhotocraftApp;
 use crate::state::Tool;
 use crate::theme::Tokens;
 
+/// How far a click on a − / + button moves its value: `base` (the tool's usual step), or
+/// [`crate::widgets::SHIFT_STEPS`] while Shift is held. Call it where the click is handled, so the
+/// Shift state is the one at the click.
+pub(super) fn step_by(ui: &Ui, base: f32) -> f32 {
+    if ui.input(|i| i.modifiers.shift) { crate::widgets::SHIFT_STEPS.max(base) } else { base }
+}
+
 /// A small square − or + button; true when clicked.
 pub(super) fn step_button(ui: &mut Ui, plus: bool) -> bool {
     let t = Tokens::get(ui.ctx());
@@ -73,11 +80,11 @@ pub fn brush(tool: Tool, ui: &mut Ui, brush: &mut photocraft_engine::BrushSettin
     crate::widgets::vline(ui, 22.0);
     label(ui, if ru { "Ширина:" } else { "Width:" });
     if step_button(ui, false) {
-        brush.size = (brush.size - 1.0).max(1.0);
+        brush.size = (brush.size - step_by(ui, 1.0)).max(1.0);
     }
     crate::widgets::value_field(ui, &mut brush.size, 1.0..=photocraft_engine::paint::MAX_BRUSH_SIZE, "", 56.0 * k);
     if step_button(ui, true) {
-        brush.size = (brush.size + 1.0).min(photocraft_engine::paint::MAX_BRUSH_SIZE);
+        brush.size = (brush.size + step_by(ui, 1.0)).min(photocraft_engine::paint::MAX_BRUSH_SIZE);
     }
     if tool != Tool::Pencil {
         crate::widgets::vline(ui, 22.0);
@@ -227,4 +234,29 @@ pub fn bucket(app: &mut PhotocraftApp, ui: &mut Ui) {
     ui.spacing_mut().item_spacing.x = 5.0;
     flood_options(app, ui, k, ru);
     ui.spacing_mut().item_spacing.x = 8.0;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What `step_by(ui, base)` gives with Shift held or not.
+    fn step(shift: bool, base: f32) -> f32 {
+        let ctx = egui::Context::default();
+        let mut raw = egui::RawInput::default();
+        raw.events.push(egui::Event::ModifiersChanged(egui::Modifiers { shift, ..Default::default() }));
+        let mut got = 0.0;
+        let _ = ctx.run_ui(raw, |ui| got = step_by(ui, base));
+        got
+    }
+
+    /// The − / + buttons of width-like options move 1 (glow size 2), and 5 with Shift held.
+    #[test]
+    fn shift_makes_the_step_buttons_move_five() {
+        assert_eq!((step(false, 1.0), step(true, 1.0)), (1.0, crate::widgets::SHIFT_STEPS));
+        assert_eq!((step(false, 2.0), step(true, 2.0)), (2.0, crate::widgets::SHIFT_STEPS));
+        assert_eq!(crate::widgets::SHIFT_STEPS, 5.0);
+        // A tool whose usual step is already bigger keeps it.
+        assert_eq!(step(true, 8.0), 8.0);
+    }
 }

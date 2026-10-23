@@ -13,7 +13,7 @@
 # graphics-editor vocabulary (Слой, Каналы, Маска, Выделение, Кривые ...), matching Photoshop's
 # Russian menu tradition where it is unambiguous. No proprietary localisation resource was
 # consulted or copied; entries are added the same way.
-# Product and technology names (PhotoCraft, ArtCraft, OpenType, CMYK, Lab ...) stay in Latin
+# Product and technology names (Spectra Paint, ArtCraft, OpenType, CMYK, Lab ...) stay in Latin
 # letters; the trailing "…" of dialog commands is kept; the colon of a label ("Width:") becomes
 # the Russian typographic equivalent, with the space the source carries.
 
@@ -522,9 +522,9 @@
 	Hide All	Скрыть все
 
 # Help
-	About PhotoCraft	О программе PhotoCraft
-	PhotoCraft Website	Сайт PhotoCraft
-	PhotoCraft on GitHub	PhotoCraft на GitHub
+	About Spectra Paint	О программе Spectra Paint
+	Spectra Paint Website	Сайт Spectra Paint
+	Spectra Paint on GitHub	Spectra Paint на GitHub
 	Report an Issue…	Сообщить о проблеме…
 	ArtCraft Website	Сайт ArtCraft
 	Join the ArtCraft Discord…	Discord сообщества ArtCraft…
@@ -605,11 +605,11 @@
 	Import Shortcuts…	Импортировать сочетания клавиш…
 	Load a keyboard shortcut set saved as .kys	Загрузить набор сочетаний клавиш, сохранённый как .kys
 	Imported {n} shortcuts from {file}. Click OK to keep them.	Импортировано сочетаний: {n} из {file}. Нажмите OK, чтобы сохранить их.
-	{n} commands are not in PhotoCraft.	Команд, которых нет в PhotoCraft: {n}.
+	{n} commands are not in Spectra Paint.	Команд, которых нет в Spectra Paint: {n}.
 	Keyboard shortcuts imported	Сочетания клавиш импортированы
 	Your keyboard shortcut set {set} is in use here: {n} shortcuts differ from the defaults. Edit › Keyboard Shortcuts shows them; Reset All to Defaults undoes this.	Здесь используется ваш набор сочетаний клавиш {set}: сочетаний, отличных от стандартных: {n}. Их показывает Редактирование › Сочетания клавиш; «Сбросить всё к значениям по умолчанию» отменяет импорт.
 	Import keyboard shortcuts?	Импортировать сочетания клавиш?
-	PhotoCraft found your keyboard shortcut set {set} from another image editor on this computer: {n} of its shortcuts differ from PhotoCraft's. Import it?	PhotoCraft нашёл на этом компьютере ваш набор сочетаний клавиш {set} из другого графического редактора: сочетаний, отличных от PhotoCraft: {n}. Импортировать его?
+	Spectra Paint found your keyboard shortcut set {set} from another image editor on this computer: {n} of its shortcuts differ from Spectra Paint's. Import it?	Spectra Paint нашёл на этом компьютере ваш набор сочетаний клавиш {set} из другого графического редактора: сочетаний, отличных от Spectra Paint: {n}. Импортировать его?
 	Edit › Keyboard Shortcuts › Reset All to Defaults undoes an import.	Редактирование › Сочетания клавиш › «Сбросить всё к значениям по умолчанию» отменяет импорт.
 	Don't Import	Не импортировать
 	The keyboard shortcut set was not imported: {error}	Набор сочетаний клавиш не импортирован: {error}
@@ -914,7 +914,7 @@
 	Embed Color Profile	Встроить цветовой профиль
 	Assign Profile…	Назначить профиль…
 	Convert to Profile…	Преобразовать в профиль…
-	PhotoCraft Manages Colors	PhotoCraft управляет цветами
+	Spectra Paint Manages Colors	Spectra Paint управляет цветами
 	Printer Manages Colors	Принтер управляет цветами
 	(print to the printer)	(печать на принтере)
 	Absolute Colorimetric	Абсолютный колориметрический
@@ -1505,15 +1505,15 @@
 	Use File › Open, or paste a copied image with {paste}.	Выберите Файл › Открыть или вставьте скопированное изображение с помощью {paste}.
 	Native file drag-and-drop is unavailable	Нативное перетаскивание файлов в Wayland недоступно
 	Native file drag-and-drop is not supported on Wayland yet. Use File › Open, or copy the image in your file manager and paste it with {paste}.	Нативное перетаскивание файлов в Wayland пока не поддерживается. Откройте файл через Файл › Открыть или скопируйте изображение в файловом менеджере и вставьте его с помощью {paste}.
-	To drop files, start PhotoCraft under XWayland: `{command}`	Чтобы перетаскивать файлы, запустите PhotoCraft в XWayland: `{command}`
-	Or set Preferences › Performance › Linux display server to X11: PhotoCraft then always starts under XWayland.	Или выберите в Настройки › Производительность › Дисплейный сервер Linux значение X11: PhotoCraft будет всегда запускаться в XWayland.
+	To drop files, start Spectra Paint under XWayland: `{command}`	Чтобы перетаскивать файлы, запустите Spectra Paint в XWayland: `{command}`
+	Or set Preferences › Performance › Linux display server to X11: Spectra Paint then always starts under XWayland.	Или выберите в Настройки › Производительность › Дисплейный сервер Linux значение X11: Spectra Paint будет всегда запускаться в XWayland.
 	Edit › Paste	Редактирование › Вставить
 	Photo	Фото
 	Print	Печать
 	Art & Illustration	Искусство и иллюстрация
 	Mobile	Мобильные
 	Film & Video	Кино и видео
-	Default PhotoCraft Size	Размер PhotoCraft по умолчанию
+	Default Spectra Paint Size	Размер Spectra Paint по умолчанию
 	Clipboard	Буфер обмена
 	Photo (2 × 3 in)	Фото (2 × 3 дюйма)
 	Photo (4 × 6 in)	Фото (4 × 6 дюйма)
@@ -1664,7 +1664,7 @@
 	Reverse	Обратить
 	Align with layer	По слою
 	Join us on Discord	Мы в Discord
-	PhotoCraft website	Сайт PhotoCraft
+	Spectra Paint website	Сайт Spectra Paint
 	ArtCraft	ArtCraft
 	GitHub	GitHub
 	No character style	Нет стиля символов
@@ -1690,9 +1690,9 @@
 	Don't Save	Не сохранять
 	No	Нет
 	Yes	Да
-	These settings aren't available in PhotoCraft yet.	Эти параметры пока недоступны в PhotoCraft.
+	These settings aren't available in Spectra Paint yet.	Эти параметры пока недоступны в Spectra Paint.
 	Shortcut removed.	Комбинация клавиш удалена.
-	All shortcuts reset to PhotoCraft defaults.	Все комбинации клавиш сброшены к стандартным PhotoCraft.
+	All shortcuts reset to Spectra Paint defaults.	Все комбинации клавиш сброшены к стандартным Spectra Paint.
 	Delete Shortcut	Удалить комбинацию
 	Press keys…	Нажмите клавиши…
 	shortcut	комбинация
@@ -2173,8 +2173,8 @@
 	Output:	Выход:
 	Paint Overlay	Перекрытие краской
 	Pattern Size	Размер паттерна
-	PhotoCraft	PhotoCraft
-	PhotoCraft — an open-source, native image editor written in Rust.	PhotoCraft — открытый нативный графический редактор на Rust.
+	Spectra Paint	Spectra Paint
+	Spectra Paint — an open-source, native image editor written in Rust.	Spectra Paint — открытый нативный графический редактор на Rust.
 	Position and Size	Положение и размер
 	Preserve Details	Сохранять детали
 	Preserve Luminosity	Сохранять светлоту
@@ -2500,7 +2500,7 @@
 	Automatic uses GPU acceleration when available and falls back to CPU rendering on errors.	Автоматический режим использует GPU, когда он доступен, и переходит на CPU при ошибках.
 	Switched to CPU rendering	Включена отрисовка на CPU
 	GPU acceleration could not continue. Your documents are unchanged.	Ускорение GPU остановлено. Документы не изменены.
-	PhotoCraft is using the CPU image compositor. The window may still use your graphics adapter.	PhotoCraft обрабатывает изображения на CPU. Окно может продолжать использовать графический адаптер.
+	Spectra Paint is using the CPU image compositor. The window may still use your graphics adapter.	Spectra Paint обрабатывает изображения на CPU. Окно может продолжать использовать графический адаптер.
 	Retry GPU requires a restart. Save your work first.	Для повтора GPU нужен перезапуск. Сначала сохраните работу.
 	Keep Using CPU	Продолжить с CPU
 	Retry GPU	Повторить GPU
@@ -2748,7 +2748,7 @@ fontWeight	Italic	Курсив
 	Color to Alpha…	Цвет в альфа-канал…
 	Transparency Threshold	Порог прозрачности
 	Opacity Threshold	Порог непрозрачности
-	PhotoCraft — Screen Color Picker	PhotoCraft — Пипетка цвета экрана
+	Spectra Paint — Screen Color Picker	Spectra Paint — Пипетка цвета экрана
 
 	Rasterize svg groups deeper than	Растеризовать группы SVG глубже этого уровня
 	0 turns this threshold off; SVG groups nested deeper than 100 levels are always rasterized.	0 отключает этот порог; группы SVG с вложенностью более 100 уровней всегда растрируются.
@@ -3060,7 +3060,7 @@ curves	Smooth	Сгладить
 	{name} (Photoshop)	{name} (Photoshop)
 	{message} ({note})	{message} ({note})
 @plural	Loaded {n} action from {file}|Loaded {n} actions from {file}	Загружена {n} операция из {file}|Загружены {n} операции из {file}|Загружено {n} операций из {file}
-@plural	{n} step has no PhotoCraft equivalent yet|{n} steps have no PhotoCraft equivalent yet	{n} шаг пока не имеет эквивалента в PhotoCraft|{n} шага пока не имеют эквивалента в PhotoCraft|{n} шагов пока не имеют эквивалента в PhotoCraft
+@plural	{n} step has no Spectra Paint equivalent yet|{n} steps have no Spectra Paint equivalent yet	{n} шаг пока не имеет эквивалента в Spectra Paint|{n} шага пока не имеют эквивалента в Spectra Paint|{n} шагов пока не имеют эквивалента в Spectra Paint
 @plural	Saved {n} action to {file}|Saved {n} actions to {file}	Сохранена {n} операция в {file}|Сохранены {n} операции в {file}|Сохранено {n} операций в {file}
 @plural	{n} step with no Photoshop equivalent left out|{n} steps with no Photoshop equivalent left out	Пропущен {n} шаг без эквивалента в Photoshop|Пропущены {n} шага без эквивалента в Photoshop|Пропущено {n} шагов без эквивалента в Photoshop
 

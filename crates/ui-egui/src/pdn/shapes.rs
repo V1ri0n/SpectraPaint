@@ -211,11 +211,11 @@ pub fn options(app: &mut PhotocraftApp, ui: &mut Ui, tool: Tool) -> bool {
     if tool == Tool::Line {
         super::options::label(ui, if ru { "Ширина:" } else { "Width:" });
         if super::options::step_button(ui, false) {
-            app.ui.tool_options.line_weight = (app.ui.tool_options.line_weight - 1.0).max(1.0);
+            app.ui.tool_options.line_weight = (app.ui.tool_options.line_weight - super::options::step_by(ui, 1.0)).max(1.0);
         }
         crate::widgets::value_field(ui, &mut app.ui.tool_options.line_weight, 1.0..=1000.0, "", 56.0 * k);
         if super::options::step_button(ui, true) {
-            app.ui.tool_options.line_weight = (app.ui.tool_options.line_weight + 1.0).min(1000.0);
+            app.ui.tool_options.line_weight = (app.ui.tool_options.line_weight + super::options::step_by(ui, 1.0)).min(1000.0);
         }
         return true;
     }
@@ -333,11 +333,11 @@ pub fn options(app: &mut PhotocraftApp, ui: &mut Ui, tool: Tool) -> bool {
     ui.add_enabled_ui(enabled, |ui| {
         let o = &mut app.ui.tool_options;
         if super::options::step_button(ui, false) {
-            o.stroke_width = (o.stroke_width - 1.0).max(1.0);
+            o.stroke_width = (o.stroke_width - super::options::step_by(ui, 1.0)).max(1.0);
         }
         crate::widgets::value_field(ui, &mut o.stroke_width, 1.0..=288.0, "", 56.0 * k);
         if super::options::step_button(ui, true) {
-            o.stroke_width = (o.stroke_width + 1.0).min(288.0);
+            o.stroke_width = (o.stroke_width + super::options::step_by(ui, 1.0)).min(288.0);
         }
         // Style: solid, dashes, dots, dash-dot.
         crate::widgets::vline(ui, 22.0);

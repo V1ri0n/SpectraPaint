@@ -167,7 +167,7 @@ fn window(app: &mut PhotocraftApp, ctx: &Context, spec: &Spec, mut body: impl Fn
         }
     };
     let builder = ViewportBuilder::default()
-        .with_title(format!("{} - PhotoCraft", if ru { spec.title.0 } else { spec.title.1 }))
+        .with_title(format!("{} - Spectra Paint", if ru { spec.title.0 } else { spec.title.1 }))
         .with_decorations(false)
         .with_taskbar(false)
         .with_resizable(spec.resizable)

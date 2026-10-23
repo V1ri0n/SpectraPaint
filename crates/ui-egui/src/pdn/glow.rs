@@ -227,11 +227,11 @@ pub fn options(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     crate::widgets::vline(ui, 22.0);
     super::options::label(ui, if ru { "Размер:" } else { "Size:" });
     if super::options::step_button(ui, false) {
-        o.glow_size = (o.glow_size - 2.0).max(1.0);
+        o.glow_size = (o.glow_size - super::options::step_by(ui, 2.0)).max(1.0);
     }
     crate::widgets::value_field(ui, &mut o.glow_size, 1.0..=250.0, "", 56.0 * k);
     if super::options::step_button(ui, true) {
-        o.glow_size = (o.glow_size + 2.0).min(250.0);
+        o.glow_size = (o.glow_size + super::options::step_by(ui, 2.0)).min(250.0);
     }
     crate::widgets::vline(ui, 22.0);
     super::options::label(ui, if ru { "Сила:" } else { "Strength:" });
