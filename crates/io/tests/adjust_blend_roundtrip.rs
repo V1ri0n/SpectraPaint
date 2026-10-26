@@ -122,6 +122,7 @@ fn adjustments() -> Vec<(Adjustment, bool)> {
             | Adjustment::Threshold { .. }
             | Adjustment::GradientMap { .. }
             | Adjustment::SelectiveColor { .. }
+            | Adjustment::NodeGrade { .. }
             | Adjustment::Unsupported { .. } => {}
         }
     }

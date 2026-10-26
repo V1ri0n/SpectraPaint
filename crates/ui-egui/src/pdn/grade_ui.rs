@@ -358,6 +358,59 @@ mod tests {
         assert!((red[0] - 0.5).abs() < 1e-5, "{red:?}");
     }
 
+    /// One frame of `f` in a panel, as the windows are drawn.
+    fn frame(ctx: &Context, f: impl FnMut(&mut Ui)) {
+        let mut f = f;
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(900.0, 700.0))), ..Default::default() };
+        ctx.run_ui(raw, |ui| f(ui)).textures_delta.clear();
+    }
+
+    #[test]
+    fn the_windows_draw_every_tab_and_edits_reach_the_layer() {
+        use crate::{PhotocraftApp, Services};
+        let ctx = Context::default();
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Services::default());
+        app.run("file.new", json!({"width": 16, "height": 16, "background": "white"})).unwrap();
+        // Without a grade layer both windows offer to make one.
+        frame(&ctx, |ui| super::super::grade_panel::body(&mut app, ui));
+        assert!(current(&app).is_none());
+        // The menu command makes the layer and opens the windows.
+        crate::menus::invoke(&mut app, &ctx, "grade.new", json!({})).unwrap();
+        assert!(app.ui.panels.grade_nodes && app.ui.panels.grade_panel);
+        let (layer, g) = current(&app).expect("a Color Grade layer");
+        assert_eq!(g.nodes.len(), 1);
+        // Every tab of the panel and the node editor draw, with and without a second node.
+        for round in 0..2 {
+            for tab in 0..5usize {
+                ctx.data_mut(|d| d.insert_temp(Id::new("pdn-grade-tab"), tab));
+                frame(&ctx, |ui| super::super::grade_panel::body(&mut app, ui));
+            }
+            for which in 0..5usize {
+                ctx.data_mut(|d| d.insert_temp(Id::new("pdn-grade-hue-curve"), which));
+                ctx.data_mut(|d| d.insert_temp(Id::new("pdn-grade-tab"), 2usize));
+                frame(&ctx, |ui| super::super::grade_panel::body(&mut app, ui));
+            }
+            frame(&ctx, |ui| super::super::grade_nodes::body(&mut app, ui));
+            if round == 0 {
+                run(&mut app, "grade.addNode", json!({"layer": layer, "kind": "parallel", "node": 1}));
+                run(&mut app, "grade.addNode", json!({"layer": layer, "kind": "layer", "node": 1}));
+                select(&ctx, layer, 2);
+            }
+        }
+        // The mixers have panels too.
+        let mixer = current(&app).map(|(_, g)| g.output).unwrap_or(0);
+        select(&ctx, layer, mixer);
+        frame(&ctx, |ui| super::super::grade_panel::body(&mut app, ui));
+        // An edit through the shared helper reaches the node, and a held press is one step.
+        select(&ctx, layer, 1);
+        let steps = app.session.active().map_or(0, |s| s.history.past_len());
+        set(&mut app, &ctx, layer, 1, json!({"saturation": 0.25}));
+        set(&mut app, &ctx, layer, 1, json!({"saturation": 0.5}));
+        let (_, g) = current(&app).unwrap();
+        assert!(matches!(&g.node(1).unwrap().kind, photocraft_doc::grade::NodeKind::Corrector(c) if c.saturation == 0.5));
+        assert_eq!(app.session.active().map_or(0, |s| s.history.past_len()), steps + 1, "both edits are one step");
+    }
+
     #[test]
     fn a_first_click_on_a_curve_gets_its_resting_points() {
         let mut p = Vec::new();
