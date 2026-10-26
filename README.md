@@ -14,7 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/artcraft"><img alt="Join the ArtCraft community on Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
+  <b>Spectra Paint is a fork of <a href="https://github.com/storytold/photocraft">PhotoCraft</a></b> (<a href="https://getartcraft.com/apps/photocraft">getartcraft.com/apps/photocraft</a>) by the ArtCraft Team and the PhotoCraft contributors,
+  with a Paint.NET-style interface, node-based colour grading (wheels, curves, nodes, scopes), redrawable icon sets and a Paint.NET <code>.pdn</code> reader and writer.<br>
+  It is not made or endorsed by ArtCraft. The ArtCraft name and logos are theirs and are not part of this fork. The licences of the original (MIT or Apache-2.0) apply.
 </p>
 
 <p align="center">
