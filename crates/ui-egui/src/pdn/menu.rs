@@ -278,7 +278,8 @@ pub(crate) const TOPS: &[Top] = &[
             Item("image.autoColor", "Автоцвет", "Auto Color"),
             Sep,
             // Colour grading with nodes, the Resolve way (engine: grade_cmds.rs, windows: grade_nodes.rs).
-            Item("grade.new", "Цветокоррекция узлами...", "Node Color Grade..."),
+            Item("grade.new", "Цветокоррекция слоя узлами...", "Node Color Grade of the Layer..."),
+            Item("grade.newGlobal", "Глобальная цветокоррекция узлами...", "Global Node Color Grade..."),
         ],
     },
     Top {

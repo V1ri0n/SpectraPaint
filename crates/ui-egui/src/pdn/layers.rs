@@ -27,7 +27,7 @@ pub(crate) fn layer_name(name: &str, ru: bool) -> String {
     if name == "Background" {
         return "Фон".to_string();
     }
-    for (en, ru_name) in [("Layer", "Слой"), ("Rectangle", "Прямоугольник"), ("Ellipse", "Овал"), ("Triangle", "Треугольник"), ("Polygon", "Многоугольник"), ("Line", "Линия")] {
+    for (en, ru_name) in [("Layer", "Слой"), ("Rectangle", "Прямоугольник"), ("Ellipse", "Овал"), ("Triangle", "Треугольник"), ("Polygon", "Многоугольник"), ("Line", "Линия"), ("Color Grade", "Коррекция"), ("Global Grade", "Глобальная")] {
         if let Some(n) = name.strip_prefix(en).and_then(|r| r.strip_prefix(' '))
             && !n.is_empty()
             && n.chars().all(|c| c.is_ascii_digit())
@@ -54,8 +54,34 @@ struct Item<'a> {
     last_sub: bool,
 }
 
+/// The layers of a list as the window shows them, top first. A layer clipped to the one below it
+/// (a Color Grade made on a layer, say) is shown under that layer, as a sub-row, though it is
+/// above it in the stack; the flag says it is such a row, and `true` again for the last of them.
+fn display_order(layers: &[Layer]) -> Vec<(&Layer, bool, bool)> {
+    let mut out = Vec::with_capacity(layers.len());
+    let mut i = layers.len();
+    while i > 0 {
+        i -= 1;
+        let Some(l) = layers.get(i) else { continue };
+        if !l.clipped || i == 0 {
+            // A base, with the clipped layers above it, nearest the base last.
+            let end = layers.iter().skip(i + 1).take_while(|c| c.clipped).count();
+            out.push((l, false, false));
+            let subs: Vec<&Layer> = layers.iter().skip(i + 1).take(end).collect();
+            for (k, c) in subs.iter().enumerate() {
+                out.push((c, true, k + 1 == subs.len()));
+            }
+        }
+    }
+    out
+}
+
 fn rows<'a>(layers: &'a [Layer], depth: usize, tracked: &[u64], out: &mut Vec<Item<'a>>) {
-    for l in layers.iter().rev() {
+    for (l, clip_sub, last) in display_order(layers) {
+        if clip_sub {
+            out.push(Item { layer: l, depth: depth + 1, base: None, subs: Vec::new(), foldable: false, expanded: false, last_sub: last });
+            continue;
+        }
         match &l.content {
             LayerContent::Group(g) if tracked.contains(&l.id.0) && !g.children.is_empty() => {
                 let subs: Vec<&Layer> = g.children.iter().skip(1).collect();
@@ -214,5 +240,34 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut Ui) {
     }
     if let Some(layer) = open_props {
         super::layer_props::open(&ctx, layer);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use photocraft_doc::Layer;
+
+    fn layer(name: &str, clipped: bool) -> Layer {
+        let mut l = Layer::group(name, Vec::new());
+        l.clipped = clipped;
+        l
+    }
+
+    fn names(order: &[(&Layer, bool, bool)]) -> Vec<String> {
+        order.iter().map(|(l, sub, last)| format!("{}{}{}", l.name, if *sub { "+" } else { "" }, if *last { "!" } else { "" })).collect()
+    }
+
+    #[test]
+    fn a_clipped_layer_is_shown_under_the_layer_it_is_clipped_to() {
+        // Bottom to top: A, its two grades, B, B's grade.
+        let layers = [layer("A", false), layer("g1", true), layer("g2", true), layer("B", false), layer("g3", true)];
+        assert_eq!(names(&display_order(&layers)), ["B", "g3+!", "A", "g1+", "g2+!"]);
+        // Without clipping the order is the stack's, top first.
+        let plain = [layer("A", false), layer("B", false)];
+        assert_eq!(names(&display_order(&plain)), ["B", "A"]);
+        // A clipped layer with nothing below is a layer of its own, and an empty list is empty.
+        assert_eq!(names(&display_order(&[layer("x", true)])), ["x"]);
+        assert!(display_order(&[]).is_empty());
     }
 }

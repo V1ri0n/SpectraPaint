@@ -161,18 +161,33 @@ fn merge(base: &mut Value, patch: &Value, path: &str) -> std::result::Result<(),
 
 // ------------------------------------------------------------------ commands
 
+/// A Color Grade layer for the active layer: it sits right above it, clipped to it, so it grades
+/// that layer alone (the layer panel shows it as a sub-layer under it). On an adjustment that is
+/// not itself clipped there is nothing to attach to, and it is a global grade.
 fn new_grade(s: &mut Session, p: &Value) -> Result<Value> {
-    const CMD: &str = "grade.new";
+    make_grade(s, p, "grade.new", false)
+}
+
+/// A Color Grade layer on top of the whole stack: it grades the image as it is composed.
+fn new_global_grade(s: &mut Session, p: &Value) -> Result<Value> {
+    make_grade(s, p, "grade.newGlobal", true)
+}
+
+fn make_grade(s: &mut Session, p: &Value, cmd: &str, global: bool) -> Result<Value> {
     let name = str_param(p, "name").map(str::to_string);
-    let id = s.edit("New Color Grade Layer", |doc, active| {
-        let name = name.unwrap_or_else(|| doc.next_layer_name("Color Grade"));
+    let id = s.edit(if global { "New Global Color Grade Layer" } else { "New Color Grade Layer" }, |doc, active| {
+        let name = name.unwrap_or_else(|| doc.next_layer_name(if global { "Global Grade" } else { "Color Grade" }));
         let mut l = Layer::new(name, LayerContent::Adjustment(Adjustment::NodeGrade { graph: NodeGraph::default() }));
-        mask_new_layer(doc, &mut l, p, CMD)?;
-        let id = doc.insert_above(*active, l);
+        mask_new_layer(doc, &mut l, p, cmd)?;
+        let attach = !global && (*active).and_then(|a| doc.layer(a)).is_some_and(|base| !matches!(base.content, LayerContent::Adjustment(_)) || base.clipped);
+        let id = if global { doc.insert_above(None, l) } else { doc.insert_above(*active, l) };
+        if attach && let Some(layer) = doc.layer_mut(id) {
+            layer.clipped = true;
+        }
         *active = Some(id);
         Ok(id)
     })?;
-    Ok(json!({"layer": id.0}))
+    Ok(json!({"layer": id.0, "clipped": !global && s.active().and_then(|d| d.doc.layer(id)).is_some_and(|l| l.clipped)}))
 }
 
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
@@ -484,6 +499,7 @@ pub fn specs() -> Vec<CommandSpec> {
     let with_layer = |body: &str| leak(if body.is_empty() { format!("{{{LAYER}}}") } else { format!("{{{LAYER},{body}}}") });
     vec![
         spec!("grade.new", "Color Grade…", &["Layer", "New Adjustment Layer"], leak(format!("{{\"name\":str?,{}}}", crate::commands::NEW_LAYER_PATH)), has_doc, new_grade),
+        spec!("grade.newGlobal", "Global Color Grade…", &["Layer", "New Adjustment Layer"], leak(format!("{{\"name\":str?,{}}}", crate::commands::NEW_LAYER_PATH)), has_doc, new_global_grade),
         spec!("grade.info", "Color Grade Info", &[], with_layer(""), has_grade, info),
         spec!("grade.setGraph", "Set Color Grade", &[], with_layer(r##""graph":{nodes,output,next_id} (as grade.info shows it)"##), has_grade, set_graph),
         spec!(

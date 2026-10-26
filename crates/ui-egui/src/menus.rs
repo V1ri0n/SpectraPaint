@@ -178,7 +178,7 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
         return r;
     }
     // A new Color Grade layer opens the windows its nodes and wheels are worked in.
-    if id == "grade.new" {
+    if matches!(id, "grade.new" | "grade.newGlobal") {
         let r = app.run(id, params)?;
         app.ui.panels.grade_nodes = true;
         app.ui.panels.grade_panel = true;

@@ -220,3 +220,71 @@ fn the_plain_adjustment_commands_leave_a_grade_alone() {
     let err = s.execute("layer.setAdjustment", json!({"brightness": 10})).map(|_| ()).unwrap_err().to_string();
     assert!(err.contains("grade."), "{err}");
 }
+
+/// A picture with a green background and a red layer over the left half; the red layer is active.
+fn two_layers() -> (Session, u64) {
+    let mut s = Session::new();
+    s.execute("file.new", json!({"width": 8, "height": 4, "background": "white"})).unwrap();
+    s.execute("layer.newFillLayer.solidColor", json!({"color": "#00ff00"})).unwrap();
+    let red = s.execute("layer.new.layer", json!({})).unwrap()["layer"].as_u64().unwrap();
+    s.execute("select.rect", json!({"x": 0, "y": 0, "width": 4, "height": 4})).unwrap();
+    s.execute("edit.fill", json!({"contents": "color", "color": "#ff0000"})).unwrap();
+    s.execute("select.deselect", json!({})).unwrap();
+    (s, red)
+}
+
+fn at(s: &Session, x: usize, y: usize) -> [f32; 3] {
+    let b = photocraft_compose::flatten(&s.active().unwrap().doc);
+    let p = b.px[y * 8 + x];
+    [p[0], p[1], p[2]]
+}
+
+#[test]
+fn a_grade_made_on_a_layer_is_clipped_to_it_and_grades_only_that_layer() {
+    let (mut s, red) = two_layers();
+    let r = s.execute("grade.new", json!({})).unwrap();
+    assert_eq!(r["clipped"], true);
+    let grade = LayerId(r["layer"].as_u64().unwrap());
+    let doc = &s.active().unwrap().doc;
+    assert!(doc.layer(grade).unwrap().clipped);
+    // Right above the layer it grades.
+    let order: Vec<u64> = doc.layers.iter().map(|l| l.id.0).collect();
+    let (i_red, i_grade) = (order.iter().position(|&i| i == red).unwrap(), order.iter().position(|&i| i == grade.0).unwrap());
+    assert_eq!(i_grade, i_red + 1);
+    let (green, red_px) = (at(&s, 6, 1), at(&s, 1, 1));
+    s.execute("grade.setNode", json!({"node": 1, "set": {"offset": {"rgb": [0.0, 0.0, 1.0], "master": 0.0}}})).unwrap();
+    assert_eq!(at(&s, 6, 1), green, "the layers the grade is not clipped to keep their colour");
+    assert_ne!(at(&s, 1, 1), red_px, "the layer it is clipped to changes");
+}
+
+#[test]
+fn a_global_grade_goes_on_top_and_grades_everything() {
+    let (mut s, _red) = two_layers();
+    let r = s.execute("grade.newGlobal", json!({})).unwrap();
+    assert_eq!(r["clipped"], false);
+    let grade = LayerId(r["layer"].as_u64().unwrap());
+    let doc = &s.active().unwrap().doc;
+    assert_eq!(doc.layers.last().map(|l| l.id), Some(grade), "on top of the stack");
+    assert!(!doc.layer(grade).unwrap().clipped);
+    assert!(doc.layer(grade).unwrap().name.starts_with("Global Grade"));
+    let green = at(&s, 6, 1);
+    s.execute("grade.setNode", json!({"node": 1, "set": {"offset": {"rgb": [0.0, 0.0, 1.0], "master": 0.0}}})).unwrap();
+    assert_ne!(at(&s, 6, 1), green, "every layer below is graded");
+    // One history step each, and undo takes the layer away.
+    assert!(s.undo() && s.undo());
+    assert!(s.active().unwrap().doc.layer(grade).is_none());
+}
+
+#[test]
+fn a_grade_made_while_a_grade_is_active_is_global_unless_that_one_is_clipped() {
+    let (mut s, _red) = two_layers();
+    // A global grade is active: a new one has nothing to attach to.
+    let g = s.execute("grade.newGlobal", json!({})).unwrap()["layer"].as_u64().unwrap();
+    let again = s.execute("grade.new", json!({})).unwrap();
+    assert_eq!(again["clipped"], false);
+    assert_ne!(again["layer"].as_u64().unwrap(), g);
+    // With nothing active (an empty document) the grade is plain and global.
+    let mut empty = Session::new();
+    empty.execute("file.new", json!({"width": 4, "height": 4, "background": "white"})).unwrap();
+    assert!(empty.execute("grade.new", json!({})).is_ok());
+}
