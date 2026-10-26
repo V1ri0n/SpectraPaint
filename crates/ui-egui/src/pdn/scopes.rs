@@ -4,11 +4,11 @@
 //! bars and the skin-tone line). They read the composite of the active document, reduced to at most
 //! 256 pixels on its longer side, and follow every change of it.
 //!
-//! The look follows a screenshot of DaVinci Resolve's scopes the user sent: black ground, a gold
-//! graticule (the parade's lines at every 128 of 1023, the vectorscope's ring with its ticks, the
-//! cross, the skin-tone line and the corner-bracket targets), and a soft trace that glows white
-//! where it is dense. The drawing itself is this program's own; the tick spacing and the glow are
-//! read off the picture by eye, so they are close to Resolve's, not exact.
+//! The look follows a screenshot of DaVinci Resolve's scopes the user sent: black ground, a thin
+//! white graticule (the parade's lines at every 128 of 1023, the vectorscope's ring with its ticks,
+//! the cross, the skin-tone line and the corner-bracket targets), and a soft, glowing trace that
+//! turns white where it is dense. The drawing itself is this program's own; the tick spacing and
+//! the glow are read off the picture by eye, so they are close to Resolve's, not exact.
 
 use super::grade_ui;
 use crate::PhotocraftApp;
@@ -80,32 +80,72 @@ pub fn count(px: &[[f32; 4]], w: usize, h: usize) -> Counts {
     c
 }
 
-/// How bright a cell holding `n` pixels draws: on a log scale, so one pixel shows (about a fifth)
-/// and a crowd of thirty saturates.
+/// How bright a cell of the (softened) field draws: on a log scale, so a single pixel shows and a
+/// crowd of forty saturates, with a curve that keeps the faint parts faint.
 fn glow(n: f32, gain: f32) -> f32 {
-    if n <= 0.0 { 0.0 } else { ((1.0 + n * gain).ln() / 33.0f32.ln()).clamp(0.0, 1.0) }
+    if n <= 0.0 { 0.0 } else { ((1.0 + n * gain).ln() / 40.0f32.ln()).clamp(0.0, 1.0).powf(1.6) }
 }
 
-/// The counts a little softened, as the scopes' traces are: most of a cell stays, the rest spreads
-/// to its neighbours (a 3×3 binomial kernel).
-fn soften(d: &[f32], w: usize, h: usize) -> Vec<f32> {
-    let at = |x: isize, y: isize| -> f32 {
-        if x < 0 || y < 0 || x >= w as isize || y >= h as isize { 0.0 } else { d.get(y as usize * w + x as usize).copied().unwrap_or(0.0) }
-    };
-    let mut out = vec![0.0; w * h];
-    for y in 0..h as isize {
-        for x in 0..w as isize {
-            let centre = at(x, y);
-            let blur = (4.0 * centre
-                + 2.0 * (at(x - 1, y) + at(x + 1, y) + at(x, y - 1) + at(x, y + 1))
-                + (at(x - 1, y - 1) + at(x + 1, y - 1) + at(x - 1, y + 1) + at(x + 1, y + 1)))
-                / 16.0;
-            if let Some(o) = out.get_mut(y as usize * w + x as usize) {
-                *o = 0.6 * centre + 0.4 * blur;
+/// A Gaussian of height 1 at its middle, `sigma` cells wide, as taps from the middle outwards.
+fn taps(sigma: f32) -> Vec<f32> {
+    let radius = (sigma * 3.0).ceil().max(1.0) as usize;
+    (0..=radius).map(|i| (-((i * i) as f32) / (2.0 * sigma * sigma)).exp()).collect()
+}
+
+/// `d` (`w`×`h`) spread by a separable Gaussian of height 1: a lone count of 1 keeps a peak of 1
+/// and lights its neighbours, which is what makes a trace look soft rather than a dot grid.
+fn spread(d: &[f32], w: usize, h: usize, sigma: f32) -> Vec<f32> {
+    let k = taps(sigma);
+    let mut across = vec![0.0f32; w * h];
+    for y in 0..h {
+        let Some(row) = d.get(y * w..(y + 1) * w) else { break };
+        for (x, v) in row.iter().enumerate() {
+            if *v == 0.0 {
+                continue;
+            }
+            for (i, wt) in k.iter().enumerate() {
+                if let Some(o) = across.get_mut(y * w + x + i).filter(|_| x + i < w) {
+                    *o += v * wt;
+                }
+                if i > 0
+                    && x >= i
+                    && let Some(o) = across.get_mut(y * w + x - i)
+                {
+                    *o += v * wt;
+                }
+            }
+        }
+    }
+    let mut out = vec![0.0f32; w * h];
+    for y in 0..h {
+        for x in 0..w {
+            let v = across.get(y * w + x).copied().unwrap_or(0.0);
+            if v == 0.0 {
+                continue;
+            }
+            for (i, wt) in k.iter().enumerate() {
+                if y + i < h
+                    && let Some(o) = out.get_mut((y + i) * w + x)
+                {
+                    *o += v * wt;
+                }
+                if i > 0
+                    && y >= i
+                    && let Some(o) = out.get_mut((y - i) * w + x)
+                {
+                    *o += v * wt;
+                }
             }
         }
     }
     out
+}
+
+/// The field a trace is drawn from: a tight core and a faint wide halo round every count.
+fn field(d: &[f32], w: usize, h: usize) -> Vec<f32> {
+    let core = spread(d, w, h, 0.85);
+    let halo = spread(d, w, h, 3.0);
+    core.iter().zip(&halo).map(|(c, h)| c + 0.035 * h).collect()
 }
 
 fn mix(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
@@ -119,19 +159,19 @@ fn rgb8(c: [f32; 3]) -> Color32 {
 /// The parade as one image: the three channels side by side, level 1 at the top.
 pub fn parade_image(c: &Counts, gain: f32) -> ColorImage {
     let mut pixels = vec![Color32::BLACK; 3 * GRID * GRID];
-    let tint = [[0.92, 0.22, 0.2], [0.2, 0.86, 0.27], [0.25, 0.36, 0.97]];
+    let tint = [[1.0, 0.2, 0.17], [0.16, 0.95, 0.24], [0.22, 0.38, 1.0]];
     for (ch, tint) in tint.iter().enumerate() {
-        let plane: Vec<f32> = c.parade.get(ch * GRID * GRID..(ch + 1) * GRID * GRID).unwrap_or_default().iter().map(|&n| n as f32).collect();
-        let plane = soften(&plane, GRID, GRID);
+        let counts: Vec<f32> = c.parade.get(ch * GRID * GRID..(ch + 1) * GRID * GRID).unwrap_or_default().iter().map(|&n| n as f32).collect();
+        let lit = field(&counts, GRID, GRID);
         for level in 0..GRID {
             for col in 0..GRID {
-                let g = glow(plane.get(level * GRID + col).copied().unwrap_or(0.0), gain);
+                let g = glow(lit.get(level * GRID + col).copied().unwrap_or(0.0), gain);
                 if g <= 0.0 {
                     continue;
                 }
                 if let Some(px) = pixels.get_mut((GRID - 1 - level) * 3 * GRID + ch * GRID + col) {
-                    // A dense trace is a little paler, as on a screen.
-                    *px = rgb8(mix(tint.map(|v| v * g), [g; 3], g * g * 0.25));
+                    // The colour at full strength in the body of the trace, a little paler at its core.
+                    *px = rgb8(mix(tint.map(|v| v * g), [g; 3], g * g * g * 0.3));
                 }
             }
         }
@@ -139,32 +179,40 @@ pub fn parade_image(c: &Counts, gain: f32) -> ColorImage {
     ColorImage::new([3 * GRID, GRID], pixels)
 }
 
-/// The vectorscope plane as an image (Cr up): each cell in the colour its pixels had, white
+/// The vectorscope plane as an image (Cr up): each cell in the colour its pixels had, white-hot
 /// where it is dense.
 pub fn plane_image(c: &Counts, gain: f32) -> ColorImage {
     let mut pixels = vec![Color32::BLACK; GRID * GRID];
     let count: Vec<f32> = c.plane.iter().map(|&n| n as f32).collect();
-    let soft = soften(&count, GRID, GRID);
+    let lit = field(&count, GRID, GRID);
+    // The colours spread the same way, so a cell takes the average of what is round it.
+    let tight = |ch: usize| -> Vec<f32> {
+        let sums: Vec<f32> = c.plane_rgb.iter().map(|v| v[ch]).collect();
+        spread(&sums, GRID, GRID, 1.6)
+    };
+    let (red, green, blue) = (tight(0), tight(1), tight(2));
+    let weight = spread(&count, GRID, GRID, 1.6);
     for row in 0..GRID {
         for col in 0..GRID {
             let i = row * GRID + col;
-            let g = glow(soft.get(i).copied().unwrap_or(0.0), gain);
+            let g = glow(lit.get(i).copied().unwrap_or(0.0), gain);
             if g <= 0.0 {
                 continue;
             }
-            let n = c.plane.get(i).copied().unwrap_or(0);
-            let mut rgb = c.plane_rgb.get(i).copied().unwrap_or([0.0; 3]);
-            if n > 0 {
-                rgb = rgb.map(|v| v / n as f32);
+            let w = weight.get(i).copied().unwrap_or(0.0);
+            let mut rgb = if w > 1e-6 {
+                [red.get(i).copied().unwrap_or(0.0) / w, green.get(i).copied().unwrap_or(0.0) / w, blue.get(i).copied().unwrap_or(0.0) / w]
             } else {
-                // A cell only its neighbours reach: a pale colour.
-                rgb = [0.6; 3];
-            }
-            // The hue at full strength, so a dim colour is still readable; the count sets the glow.
+                [0.8; 3]
+            };
+            // The hue at full strength and its chroma pushed up, so a pale colour still reads as its
+            // hue on the plane; the field sets the glow.
+            let mean = (rgb[0] + rgb[1] + rgb[2]) / 3.0;
+            rgb = rgb.map(|v| (mean + (v - mean) * 3.0).clamp(0.0, 1.0));
             let top = rgb.iter().copied().fold(0.0f32, f32::max);
             rgb = if top > 1e-4 { rgb.map(|v| v / top) } else { [0.8; 3] };
             if let Some(px) = pixels.get_mut((GRID - 1 - row) * GRID + col) {
-                *px = rgb8(mix(rgb.map(|v| v * g), [1.0; 3], g * g * g * 0.9));
+                *px = rgb8(mix(rgb.map(|v| v * g), [1.0; 3], g * g * g * g * 0.7));
             }
         }
     }
@@ -242,20 +290,13 @@ fn texture(ctx: &Context, name: &str, generation: u64, gain: f32, make: impl FnO
     t
 }
 
-fn gain_row(ui: &mut Ui, key: &str) -> f32 {
-    let id = Id::new(("pdn-scopes-gain", key));
-    let mut gain = ui.ctx().data(|d| d.get_temp::<f32>(id)).unwrap_or(1.0);
-    if let Some(v) = grade_ui::slider(ui, grade_ui::tr("Яркость", "Brightness"), gain, (0.1, 5.0), 1.0, 1) {
-        gain = v;
-        ui.ctx().data_mut(|d| d.insert_temp(id, gain));
-    }
-    gain
-}
+/// The trace's brightness: the scopes have no control for it.
+const GAIN: f32 = 1.0;
 
-/// The graticule's gold, at full and at half strength.
-const GOLD: Color32 = Color32::from_rgb(160, 136, 38);
-const GOLD_DIM: Color32 = Color32::from_rgb(98, 84, 26);
-const GOLD_TEXT: Color32 = Color32::from_rgb(176, 150, 46);
+/// The graticule's white, at full and at half strength, and the numbers' own.
+const WHITE: Color32 = Color32::from_rgba_premultiplied(120, 120, 120, 120);
+const WHITE_DIM: Color32 = Color32::from_rgba_premultiplied(52, 52, 52, 52);
+const WHITE_TEXT: Color32 = Color32::from_rgba_premultiplied(170, 170, 170, 170);
 
 fn line(ui: &Ui, a: Pos2, b: Pos2, colour: Color32) {
     ui.painter().line_segment([a, b], Stroke::new(1.0, colour));
@@ -272,7 +313,7 @@ fn none_to_show(ui: &mut Ui) {
 const PARADE_CODES: [u32; 9] = [0, 128, 256, 384, 512, 640, 768, 896, 1023];
 
 pub fn parade_body(app: &mut PhotocraftApp, ui: &mut Ui) {
-    let gain = gain_row(ui, "parade");
+    let gain = GAIN;
     let Some((counts, generation)) = current(app, ui.ctx()) else { return none_to_show(ui) };
     let avail = ui.available_size();
     let (rect, _) = ui.allocate_exact_size(vec2(avail.x.max(80.0), avail.y.max(80.0)), Sense::hover());
@@ -284,14 +325,14 @@ pub fn parade_body(app: &mut PhotocraftApp, ui: &mut Ui) {
     for code in PARADE_CODES {
         let y = plot.bottom() - plot.height() * code as f32 / 1023.0;
         let strong = matches!(code, 0 | 256 | 512 | 768 | 1023);
-        line(ui, pos2(plot.left(), y), pos2(plot.right(), y), if strong { GOLD } else { GOLD_DIM });
-        ui.painter().text(pos2(plot.left() - 5.0, y), egui::Align2::RIGHT_CENTER, code.to_string(), egui::FontId::proportional(9.5), GOLD_TEXT);
+        line(ui, pos2(plot.left(), y), pos2(plot.right(), y), if strong { WHITE } else { WHITE_DIM });
+        ui.painter().text(pos2(plot.left() - 5.0, y), egui::Align2::RIGHT_CENTER, code.to_string(), egui::FontId::proportional(9.5), WHITE_TEXT);
     }
     // The ruler along the bottom.
     for i in 0..=48 {
         let x = plot.left() + plot.width() * i as f32 / 48.0;
         let len = if i % 4 == 0 { 6.0 } else { 3.0 };
-        line(ui, pos2(x, plot.bottom() + 2.0), pos2(x, plot.bottom() + 2.0 + len), GOLD_DIM);
+        line(ui, pos2(x, plot.bottom() + 2.0), pos2(x, plot.bottom() + 2.0 + len), WHITE_DIM);
     }
 }
 
@@ -320,7 +361,7 @@ fn bracket(ui: &Ui, centre: Pos2, half: f32, colour: Color32) {
 }
 
 pub fn vectorscope_body(app: &mut PhotocraftApp, ui: &mut Ui) {
-    let gain = gain_row(ui, "vectorscope");
+    let gain = GAIN;
     let Some((counts, generation)) = current(app, ui.ctx()) else { return none_to_show(ui) };
     let avail = ui.available_size();
     let side = avail.x.min(avail.y).max(80.0);
@@ -332,24 +373,24 @@ pub fn vectorscope_body(app: &mut PhotocraftApp, ui: &mut Ui) {
     let centre = plot.center();
     let radius = plot.width() / 2.0;
     // The ring, with a tick every 3 degrees (a longer one every 15), pointing in.
-    ui.painter().circle_stroke(centre, radius, Stroke::new(1.2, GOLD));
+    ui.painter().circle_stroke(centre, radius, Stroke::new(1.0, WHITE));
     for step in 0..120 {
         let a = (step as f32 * 3.0).to_radians();
         let long = step % 5 == 0;
         let (dx, dy) = (a.cos(), -a.sin());
         let inner = radius * if long { 0.955 } else { 0.975 };
-        line(ui, pos2(centre.x + dx * inner, centre.y + dy * inner), pos2(centre.x + dx * radius, centre.y + dy * radius), GOLD);
+        line(ui, pos2(centre.x + dx * inner, centre.y + dy * inner), pos2(centre.x + dx * radius, centre.y + dy * radius), WHITE);
     }
-    line(ui, pos2(plot.left(), centre.y), pos2(plot.right(), centre.y), GOLD);
-    line(ui, pos2(centre.x, plot.top()), pos2(centre.x, plot.bottom()), GOLD);
+    line(ui, pos2(plot.left(), centre.y), pos2(plot.right(), centre.y), WHITE);
+    line(ui, pos2(centre.x, plot.top()), pos2(centre.x, plot.bottom()), WHITE);
     let a = SKIN_DEGREES.to_radians();
-    line(ui, centre, pos2(centre.x + radius * a.cos(), centre.y - radius * a.sin()), GOLD);
+    line(ui, centre, pos2(centre.x + radius * a.cos(), centre.y - radius * a.sin()), WHITE);
     for (name, rgb) in TARGETS {
         let (cb, cr) = cb_cr(rgb.map(|v| v * 0.75));
         let p = plane_point(plot, cb, cr);
         let half = radius * 0.075;
-        bracket(ui, p, half, Color32::from_rgb(205, 190, 125));
-        ui.painter().text(pos2(p.x + half + 3.0, p.y + half * 0.5), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(10.0), GOLD_TEXT);
+        bracket(ui, p, half, Color32::from_white_alpha(190));
+        ui.painter().text(pos2(p.x + half + 3.0, p.y + half * 0.5), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(10.0), WHITE_TEXT);
     }
 }
 
