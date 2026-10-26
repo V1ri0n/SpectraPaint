@@ -16,6 +16,7 @@ pub mod icon_actions;
 pub mod grade_nodes;
 pub mod grade_panel;
 pub mod grade_ui;
+pub mod scopes;
 pub mod icon_sheet;
 pub mod history;
 pub mod icons;
@@ -275,6 +276,8 @@ fn menu_row(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             ("win-tools", "Инструменты (F5)", "Tools (F5)", app.ui.panels.toolbar),
             ("win-grade", "Цветокоррекция", "Color Grade", app.ui.panels.grade_panel),
             ("win-nodes", "Узлы цветокоррекции", "Grade Nodes", app.ui.panels.grade_nodes),
+            ("win-parade", "RGB-парад", "RGB Parade", app.ui.panels.scope_parade),
+            ("win-vectorscope", "Векторскоп", "Vectorscope", app.ui.panels.scope_vector),
         ];
         for (k, (icon, r, e, on)) in rows.into_iter().enumerate() {
             if icons::button(ui, icon, u(&ctx, 30.0), on, true, if ru { r } else { e }).clicked() {
@@ -285,7 +288,9 @@ fn menu_row(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                     2 => p.history = !p.history,
                     3 => p.toolbar = !p.toolbar,
                     4 => p.grade_panel = !p.grade_panel,
-                    _ => p.grade_nodes = !p.grade_nodes,
+                    5 => p.grade_nodes = !p.grade_nodes,
+                    6 => p.scope_parade = !p.scope_parade,
+                    _ => p.scope_vector = !p.scope_vector,
                 }
             }
         }

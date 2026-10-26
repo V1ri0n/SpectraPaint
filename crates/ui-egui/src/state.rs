@@ -443,6 +443,11 @@ pub struct Panels {
     pub grade_nodes: bool,
     #[serde(default)]
     pub grade_panel: bool,
+    /// Paint.NET layout: the RGB parade and the vectorscope.
+    #[serde(default)]
+    pub scope_parade: bool,
+    #[serde(default)]
+    pub scope_vector: bool,
 }
 
 impl Default for Panels {
@@ -469,6 +474,8 @@ impl Default for Panels {
             pdn_embed: false,
             grade_nodes: false,
             grade_panel: false,
+            scope_parade: false,
+            scope_vector: false,
         }
     }
 }

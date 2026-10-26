@@ -61,4 +61,6 @@ pub static ICONS: &[(&str, &[u8])] = &[
     // New icons only ever go at the end: the icon sheet (icon_sheet.rs) is laid out in this order.
     ("win-nodes", include_bytes!("../../../../assets/pdn/win-nodes.svg")),
     ("win-grade", include_bytes!("../../../../assets/pdn/win-grade.svg")),
+    ("win-parade", include_bytes!("../../../../assets/pdn/win-parade.svg")),
+    ("win-vectorscope", include_bytes!("../../../../assets/pdn/win-vectorscope.svg")),
 ];
