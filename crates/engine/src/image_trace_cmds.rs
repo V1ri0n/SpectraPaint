@@ -25,6 +25,8 @@ pub const MAX_COLORS: usize = 32;
 const MAX_PIXELS: u64 = 16_000_000;
 /// Colours sampled to build the palette (the rest are only matched to it).
 const MAX_SAMPLES: usize = 200_000;
+/// Rounds of k-means that follow the box split when the palette is chosen.
+const KMEANS_ROUNDS: usize = 4;
 
 fn bad(msg: impl Into<String>) -> EngineError {
     EngineError::BadParams { cmd: "path.imageTrace".into(), msg: msg.into() }
@@ -38,8 +40,11 @@ fn luma(c: [f32; 3]) -> f32 {
     0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
 }
 
-/// `colors` colours chosen by median cut over `samples`: the box with the widest channel range is
-/// split at the median of that channel until there are enough boxes; each box gives its mean.
+/// `colors` colours chosen over `samples`: the box with the widest channel range is split in the
+/// middle of that range (a median split would cut a dominant colour such as a white page in two
+/// and starve the small colours) until there are enough boxes; each box gives its mean, and a few
+/// rounds of k-means then pull the colours onto the clusters the pixels really form, so a
+/// colour is not dragged towards the anti-aliased pixels between two others.
 fn median_cut(mut samples: Vec<[f32; 3]>, colors: usize) -> Vec<[f32; 3]> {
     if samples.is_empty() {
         return Vec::new();
@@ -63,18 +68,38 @@ fn median_cut(mut samples: Vec<[f32; 3]>, colors: usize) -> Vec<[f32; 3]> {
         }
         let (a, b) = boxes[i];
         samples[a..b].sort_unstable_by(|x, y| x[ch].total_cmp(&y[ch]));
-        let mid = a + (b - a) / 2;
+        let centre = (samples[a][ch] + samples[b - 1][ch]) / 2.0;
+        let mut mid = a + samples[a..b].partition_point(|p| p[ch] < centre);
+        if mid == a || mid == b {
+            mid = a + (b - a) / 2;
+        }
         boxes[i] = (a, mid);
         boxes.push((mid, b));
     }
-    boxes
+    let mut centres: Vec<[f32; 3]> = boxes
         .into_iter()
         .map(|(a, b)| {
             let n = (b - a) as f32;
             let sum = samples[a..b].iter().fold([0.0f32; 3], |acc, p| [acc[0] + p[0], acc[1] + p[1], acc[2] + p[2]]);
             [sum[0] / n, sum[1] / n, sum[2] / n]
         })
-        .collect()
+        .collect();
+    for _ in 0..KMEANS_ROUNDS {
+        let mut sums = vec![([0.0f32; 3], 0usize); centres.len()];
+        for p in &samples {
+            let i = nearest(&centres, *p, false);
+            for (acc, v) in sums[i].0.iter_mut().zip(p) {
+                *acc += v;
+            }
+            sums[i].1 += 1;
+        }
+        for (c, (sum, n)) in centres.iter_mut().zip(sums) {
+            if n > 0 {
+                *c = sum.map(|v| v / n as f32);
+            }
+        }
+    }
+    centres
 }
 
 /// The palette for `mode` over the opaque pixels of `px`.
@@ -285,6 +310,18 @@ mod tests {
         let mut pal = median_cut(samples, 2);
         pal.sort_by(|a, b| a[0].total_cmp(&b[0]));
         assert_eq!(pal, vec![[0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]);
+        // A dominant colour does not starve the small ones: a white page with a red and a blue
+        // patch (and a few blends between them) gives white, red and blue, not two whites.
+        let mut page = vec![[1.0, 1.0, 1.0]; 730];
+        page.extend(vec![[0.8, 0.1, 0.1]; 160]);
+        page.extend(vec![[0.1, 0.2, 0.8]; 100]);
+        page.extend(vec![[0.9, 0.6, 0.6]; 10]);
+        let mut pal = median_cut(page, 3);
+        pal.sort_by(|a, b| b[0].total_cmp(&a[0]));
+        let close = |a: [f32; 3], b: [f32; 3]| (0..3).all(|i| (a[i] - b[i]).abs() < 0.12);
+        assert!(pal.iter().any(|c| close(*c, [1.0, 1.0, 1.0])), "{pal:?}");
+        assert!(pal.iter().any(|c| close(*c, [0.8, 0.1, 0.1])), "{pal:?}");
+        assert!(pal.iter().any(|c| close(*c, [0.1, 0.2, 0.8])), "{pal:?}");
         // One colour cannot be split.
         assert_eq!(median_cut(vec![[0.3; 3]; 10], 8).len(), 1);
         assert!(median_cut(Vec::new(), 4).is_empty());
