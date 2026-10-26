@@ -536,6 +536,36 @@ fn lookup(n: usize, tetrahedral: bool, dither: bool) -> Adjustment {
     Adjustment::ColorLookup { name: "test".into(), lut: Some(std::sync::Arc::new(t)), size: n as u32, tetrahedral, dither }
 }
 
+/// A node grade runs on the GPU as a baked 3D LUT: close to the CPU's exact grade (the table
+/// interpolates), and a grade with windows stays on the CPU.
+#[test]
+fn node_grade_is_a_baked_lut_on_the_gpu() {
+    use photocraft_doc::grade::{GradeWindow, NodeGraph, NodeKind, Wheel, WindowShape};
+    let Some(mut g) = gpu() else { return };
+    let mut graph = NodeGraph::default();
+    let Some(NodeKind::Corrector(c)) = graph.node_mut(1).map(|n| &mut n.kind) else { panic!("a corrector") };
+    c.gain = Wheel { rgb: [0.1, 0.0, -0.1], master: 0.1 };
+    c.gamma = Wheel { rgb: [0.0, 0.05, 0.0], master: 0.1 };
+    c.saturation = 1.3;
+    c.contrast = 1.15;
+    c.temperature = 0.2;
+    assert!(photocraft_gpu::plan::adjustment_on_gpu(&Adjustment::NodeGrade { graph: graph.clone() }, ColorMode::Rgb));
+    let mut d = base_doc(48, 40);
+    d.layers.push(noise_layer("mid", PixelFormat::RGBA8, Rect::new(8, 8, 40, 32), 3, 0.5));
+    d.layers.push(Layer::new("grade", LayerContent::Adjustment(Adjustment::NodeGrade { graph: graph.clone() })));
+    let cpu = photocraft_compose::render(&d, d.bounds());
+    let (out, _) = photocraft_gpu::render_to_vec_stats(&mut g.comp, &g.device, &g.queue, &d, d.bounds()).unwrap_or_else(|e| panic!("{e}"));
+    // The CPU keeps a grade's overshoot (2.0 is a stop over white); the table and the screen stop at 0..1.
+    let shown: Vec<[f32; 4]> = cpu.px.iter().map(|p| [p[0].clamp(0.0, 1.0), p[1].clamp(0.0, 1.0), p[2].clamp(0.0, 1.0), p[3]]).collect();
+    let worst = worst_diff(&shown, &out);
+    assert!(worst.0 < 4.0 / 255.0, "the baked LUT is {:.2}/255 off the exact grade", worst.0 * 255.0);
+    // With a window the grade depends on the pixel's place: the CPU keeps it.
+    if let Some(NodeKind::Corrector(c)) = graph.node_mut(1).map(|n| &mut n.kind) {
+        c.matte.windows.push(GradeWindow { shape: WindowShape::Circle, center: [0.5, 0.5], size: [0.5, 0.5], rotation: 0.0, softness: 0.2, invert: false, enabled: true });
+    }
+    assert!(!photocraft_gpu::plan::adjustment_on_gpu(&Adjustment::NodeGrade { graph }, ColorMode::Rgb));
+}
+
 #[test]
 fn adjustment_layers() {
     let Some(mut g) = gpu() else { return };

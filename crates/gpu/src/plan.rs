@@ -1575,8 +1575,10 @@ pub fn adjustment_on_gpu(adj: &Adjustment, mode: photocraft_color::ColorMode) ->
         photocraft_color::ColorMode::Cmyk => cmyk_channel_adjustment(adj),
         _ => false,
     };
-    // A node-based grade (windows, qualifiers, many nodes) is evaluated on the CPU.
-    !tone_in_space && !own_channels && !matches!(adj, Adjustment::NodeGrade { .. })
+    // A node-based grade goes through a baked 3D LUT; its windows depend on the pixel's place, which
+    // a LUT cannot hold, so a grade with windows is evaluated on the CPU.
+    let windowed_grade = matches!(adj, Adjustment::NodeGrade { graph } if photocraft_compose::grade::has_windows(graph));
+    !tone_in_space && !own_channels && !windowed_grade
 }
 
 /// A tone transfer as the shader's `t_decode`/`t_encode` exponent (0: the sRGB curve).
@@ -1701,24 +1703,38 @@ pub fn adjustment_program(adj: &Adjustment, transfer: Transfer, depth: photocraf
             (15, p, Some(vec![row]))
         }
         Adjustment::ColorLookup { lut: Some(table), size, tetrahedral, dither, .. } if lut3d_len(*size).is_some_and(|len| table.len() >= len) => {
-            // The flattened table (n³ RGB triplets) spans as many 4096-wide rows as it needs.
-            let n = *size as usize;
-            let rows = lut3d_len(*size)
-                .and_then(|len| table.get(..len))
-                .unwrap_or_default()
-                .chunks(4096)
-                .map(|c| {
-                    let mut row = [0.0f32; 4096];
-                    row[..c.len()].copy_from_slice(c);
-                    row
-                })
-                .collect();
-            p[0] = [n as f32, if *tetrahedral { 1.0 } else { 0.0 }, if *dither { 1.0 } else { 0.0 }, 0.0];
-            (16, p, Some(rows))
+            lut3d_op(&mut p, table, *size, *tetrahedral, *dither)
+        }
+        // The grade as a baked LUT: the curves and wheels are one table, so a drag on a wheel moves
+        // only 33³ entries instead of making the CPU grade every pixel of the document.
+        Adjustment::NodeGrade { graph } if !photocraft_compose::grade::has_windows(graph) => {
+            match photocraft_compose::grade::bake_lut(graph, GRADE_LUT_SIZE as usize) {
+                Some(table) => lut3d_op(&mut p, &table, GRADE_LUT_SIZE, true, false),
+                None => (0, p, None),
+            }
         }
         // Identity on the CPU too (not evaluated there).
         Adjustment::ColorLookup { .. } | Adjustment::Unsupported { .. } | Adjustment::NodeGrade { .. } => (0, p, None),
     }
+}
+
+/// The grid of the LUT a node grade is baked to for the GPU.
+const GRADE_LUT_SIZE: u32 = 33;
+
+/// The 3D LUT kernel (16) with `table` (n³ RGB triplets, flattened) spread over as many 4096-wide rows as it needs.
+fn lut3d_op(p: &mut [[f32; 4]; 4], table: &[f32], size: u32, tetrahedral: bool, dither: bool) -> (i32, [[f32; 4]; 4], Option<Vec<[f32; 4096]>>) {
+    let rows = lut3d_len(size)
+        .and_then(|len| table.get(..len))
+        .unwrap_or_default()
+        .chunks(4096)
+        .map(|c| {
+            let mut row = [0.0f32; 4096];
+            row[..c.len()].copy_from_slice(c);
+            row
+        })
+        .collect();
+    p[0] = [size as f32, if tetrahedral { 1.0 } else { 0.0 }, if dither { 1.0 } else { 0.0 }, 0.0];
+    (16, *p, Some(rows))
 }
 
 /// A gradient's colour and alpha as four 4096-entry LUT rows (`lut_tex`).

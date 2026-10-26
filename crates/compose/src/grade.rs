@@ -583,6 +583,21 @@ mod tests {
         (0..3).all(|i| (a[i] - b[i]).abs() < 1e-4)
     }
 
+    /// Timing probe for a drag on a wheel: `cargo test -p photocraft-compose --release grade_timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn grade_timing() {
+        let (w, h) = (3000, 2000);
+        let mut b = buf(w, h, |x, y| [x as f32 / w as f32, y as f32 / h as f32, 0.4, 1.0]);
+        let mut g = NodeGraph::default();
+        corrector(&mut g, 1).gamma = Wheel { rgb: [0.1, -0.05, 0.0], master: 0.1 };
+        for _ in 0..3 {
+            let t = std::time::Instant::now();
+            apply(&g, &mut b, Rect::new(0, 0, w, h));
+            println!("grade {w}x{h}: {:?}", t.elapsed());
+        }
+    }
+
     #[test]
     fn a_neutral_graph_changes_nothing() {
         let g = NodeGraph::default();
