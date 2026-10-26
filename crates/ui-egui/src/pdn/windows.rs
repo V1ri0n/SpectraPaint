@@ -49,6 +49,7 @@ pub fn embed(ctx: &Context) -> bool {
 /// Shows every window that is on.
 pub fn show(app: &mut PhotocraftApp, ctx: &Context) {
     EMBED.store(app.ui.panels.pdn_embed, std::sync::atomic::Ordering::Relaxed);
+    super::icon_sheet::load_kept();
     super::layer_props::show(app, ctx);
     super::new_image::show(app, ctx);
     super::glow::show(app, ctx);

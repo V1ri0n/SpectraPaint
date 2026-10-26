@@ -22,8 +22,12 @@ pub fn exists(name: &str) -> bool {
 
 /// Paint icon `name` centred in `rect` at `size` points. An unknown name paints nothing.
 pub fn paint(ui: &Ui, rect: Rect, name: &str, size: f32, enabled: bool) {
-    let Some((key, bytes)) = table().get_key_value(name) else { return };
     let tint = if enabled { Color32::WHITE } else { Color32::from_white_alpha(70) };
+    // An icon the user redrew (Settings > Redraw Icons) takes the official one's place.
+    if super::icon_sheet::paint(ui, rect, name, size, tint) {
+        return;
+    }
+    let Some((key, bytes)) = table().get_key_value(name) else { return };
     let r = Rect::from_center_size(rect.center(), Vec2::splat(size));
     egui::Image::from_bytes(format!("bytes://pdn/{key}.svg"), *bytes).fit_to_exact_size(Vec2::splat(size)).tint(tint).paint_at(ui, r);
 }

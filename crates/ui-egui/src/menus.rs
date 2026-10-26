@@ -103,6 +103,11 @@ pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
     ("pdn.bench", "Performance Check…", &[], None),
     ("pdn.snapshots", "Work Snapshots…", &[], None),
     ("pdn.addRef", "Add Reference…", &[], None),
+    ("pdn.icons.redraw", "Redraw Icons…", &[], None),
+    ("pdn.icons.apply", "Use Icons from the Open Picture", &[], None),
+    ("pdn.icons.save", "Save Icon Set…", &[], None),
+    ("pdn.icons.load", "Load Icon Set…", &[], None),
+    ("pdn.icons.reset", "Back to the Official Icons", &[], None),
     ("pdn.toggleRefs", "Show References", &[], None),
     ("help.systemInfo", "System Info…", &["Help"], None),
     ("help.about", "About Spectra Paint", &["Help"], None),
@@ -169,6 +174,9 @@ pub fn invoke(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, params: Va
 
 /// [`invoke`] without the unsaved-changes prompt, for once the user has already answered it.
 pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, params: Value) -> Result<Value, String> {
+    if let Some(r) = crate::pdn::icon_actions::invoke(app, id, &params) {
+        return r;
+    }
     // Paint.NET: what is pasted belongs to the layer it is pasted on.
     if crate::pdn::active() && id.starts_with("edit.paste") {
         crate::pdn::finalize::note_paste(ctx);
@@ -801,6 +809,9 @@ pub fn is_enabled(app: &PhotocraftApp, id: &str) -> bool {
         return e;
     }
     if let Some(e) = crate::crop_ui::is_enabled(app, id) {
+        return e;
+    }
+    if let Some(e) = crate::pdn::icon_actions::enabled(app, id) {
         return e;
     }
     match id {

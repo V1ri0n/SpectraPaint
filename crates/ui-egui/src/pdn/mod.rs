@@ -12,6 +12,8 @@ pub mod pdf;
 pub mod refs;
 pub mod colors;
 mod icon_data;
+pub mod icon_actions;
+pub mod icon_sheet;
 pub mod history;
 pub mod icons;
 pub mod layer_props;
@@ -246,9 +248,22 @@ fn menu_row(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             ui.separator();
             ui.checkbox(&mut app.ui.panels.pdn_embed, if ru { "Панели внутри окна (быстрее)" } else { "Panels inside the window (faster)" });
         });
-        if icons::button(ui, "gear", u(&ctx, 30.0), false, true, if ru { "Параметры" } else { "Settings" }).clicked() {
-            let _ = crate::menus::invoke(app, &ctx, "edit.preferences.general", json!({}));
-        }
+        let gear = icons::button(ui, "gear", u(&ctx, 30.0), false, true, if ru { "Параметры" } else { "Settings" });
+        egui::Popup::menu(&gear).show(|ui| {
+            ui.set_min_width(260.0);
+            if ui.button(if ru { "Параметры..." } else { "Settings..." }).clicked() {
+                let _ = crate::menus::invoke(app, &ctx, "edit.preferences.general", json!({}));
+                ui.close();
+            }
+            ui.separator();
+            for (id, r, e) in icon_actions::ITEMS {
+                let on = icon_actions::enabled(app, id).unwrap_or(true);
+                if ui.add_enabled(on, egui::Button::new(if ru { *r } else { *e })).clicked() {
+                    let _ = crate::menus::invoke(app, &ctx, id, json!({}));
+                    ui.close();
+                }
+            }
+        });
         ui.add_space(8.0);
         let rows = [
             ("win-colors", "Палитра (F8)", "Colors (F8)", app.ui.panels.color),
