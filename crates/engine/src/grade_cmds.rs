@@ -244,14 +244,21 @@ fn set_node(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => None,
         Some(v) => Some(v.as_bool().ok_or_else(|| bad(CMD, "`bypass` must be true or false"))?),
     };
+    let pos = match p.get("pos") {
+        None | Some(Value::Null) => None,
+        Some(v) => {
+            let a = v.as_array().filter(|a| a.len() == 2).and_then(|a| Some([a[0].as_f64()?, a[1].as_f64()?]));
+            Some(a.filter(|a| a.iter().all(|x| x.is_finite() && x.abs() < 1e4)).map(|a| [a[0] as f32, a[1] as f32]).ok_or_else(|| bad(CMD, "`pos` must be [x, y]"))?)
+        }
+    };
     let set = p.get("set");
     if let Some(v) = set
         && !v.is_object()
     {
         return Err(bad(CMD, "`set` must be an object of settings"));
     }
-    if label.is_none() && bypass.is_none() && set.is_none() {
-        return Err(bad(CMD, "nothing to change: give `set`, `label` or `bypass`"));
+    if label.is_none() && bypass.is_none() && set.is_none() && pos.is_none() {
+        return Err(bad(CMD, "nothing to change: give `set`, `label`, `bypass` or `pos`"));
     }
     let (id, _) = edit_graph(s, p, CMD, "Grade Node", |g| {
         let n = g.node_mut(node).ok_or_else(|| bad(CMD, format!("node {node} does not exist")))?;
@@ -260,6 +267,9 @@ fn set_node(s: &mut Session, p: &Value) -> Result<Value> {
         }
         if let Some(b) = bypass {
             n.bypass = b;
+        }
+        if let Some(p) = pos {
+            n.pos = p;
         }
         if let Some(patch) = set {
             let mut v = serde_json::to_value(&n.kind).map_err(|e| bad(CMD, e.to_string()))?;
@@ -473,7 +483,7 @@ pub fn specs() -> Vec<CommandSpec> {
     let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
     let with_layer = |body: &str| leak(if body.is_empty() { format!("{{{LAYER}}}") } else { format!("{{{LAYER},{body}}}") });
     vec![
-        spec!("grade.new", "Color Grade…", &[], leak(format!("{{\"name\":str?,{}}}", crate::commands::NEW_LAYER_PATH)), has_doc, new_grade),
+        spec!("grade.new", "Color Grade…", &["Layer", "New Adjustment Layer"], leak(format!("{{\"name\":str?,{}}}", crate::commands::NEW_LAYER_PATH)), has_doc, new_grade),
         spec!("grade.info", "Color Grade Info", &[], with_layer(""), has_grade, info),
         spec!("grade.setGraph", "Set Color Grade", &[], with_layer(r##""graph":{nodes,output,next_id} (as grade.info shows it)"##), has_grade, set_graph),
         spec!(
@@ -492,7 +502,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Grade Node Settings",
             &[],
             with_layer(
-                r##""node":id,"set":{…}? (merged into the node's settings: corrector → lift|gamma|gain|offset {rgb:[r,g,b],master} (-1..1), contrast=1, pivot=0.435, saturation=1, hue° , temperature, tint, boost, shadows, highlights, curves {y,r,g,b:[{input,output}]}, hueCurves {hue_vs_hue,hue_vs_sat,hue_vs_lum,lum_vs_sat,sat_vs_sat:[[x,change]]}, matte {gain, qualifier{…}, windows[{shape:Circle|Linear|Gradient,center,size,rotation,softness,invert,enabled}]}; layer mixer → layers[{mode,opacity}]; LUT → intensity, tetrahedral),"label":str?,"bypass":bool?"##
+                r##""node":id,"set":{…}? (merged into the node's settings: corrector → lift|gamma|gain|offset {rgb:[r,g,b],master} (-1..1), contrast=1, pivot=0.435, saturation=1, hue° , temperature, tint, boost, shadows, highlights, curves {y,r,g,b:[{input,output}]}, hueCurves {hue_vs_hue,hue_vs_sat,hue_vs_lum,lum_vs_sat,sat_vs_sat:[[x,change]]}, matte {gain, qualifier{…}, windows[{shape:Circle|Linear|Gradient,center,size,rotation,softness,invert,enabled}]}; layer mixer → layers[{mode,opacity}]; LUT → intensity, tetrahedral),"label":str?,"bypass":bool?,"pos":[x,y]? (where the node editor draws it)"##
             ),
             has_grade,
             set_node

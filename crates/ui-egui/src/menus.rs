@@ -177,6 +177,13 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
     if let Some(r) = crate::pdn::icon_actions::invoke(app, id, &params) {
         return r;
     }
+    // A new Color Grade layer opens the windows its nodes and wheels are worked in.
+    if id == "grade.new" {
+        let r = app.run(id, params)?;
+        app.ui.panels.grade_nodes = true;
+        app.ui.panels.grade_panel = true;
+        return Ok(r);
+    }
     // Paint.NET: what is pasted belongs to the layer it is pasted on.
     if crate::pdn::active() && id.starts_with("edit.paste") {
         crate::pdn::finalize::note_paste(ctx);

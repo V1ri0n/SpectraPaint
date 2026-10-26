@@ -16,11 +16,11 @@ const SWATCH_PX: f32 = 16.5;
 /// Most colours the user adds to the palette.
 const MAX_CUSTOM: usize = 32;
 
-fn k(ui: &Ui) -> f32 {
+pub(super) fn k(ui: &Ui) -> f32 {
     1.0 / ui.ctx().pixels_per_point()
 }
 
-fn to32(c: [f32; 4]) -> Color32 {
+pub(super) fn to32(c: [f32; 4]) -> Color32 {
     let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
     Color32::from_rgb(q(c[0]), q(c[1]), q(c[2]))
 }
@@ -37,7 +37,7 @@ fn with_alpha(mut c: [f32; 4], a: f32) -> [f32; 4] {
 
 /// A gradient bar with a pointer under it; returns the new position (0..1) while the bar is dragged.
 /// `checker` draws a transparency checkerboard behind a bar whose colours are translucent.
-fn gradient_bar(ui: &mut Ui, width: f32, value: f32, checker: bool, at: impl Fn(f32) -> Color32) -> Option<f32> {
+pub(super) fn gradient_bar(ui: &mut Ui, width: f32, value: f32, checker: bool, at: impl Fn(f32) -> Color32) -> Option<f32> {
     let t = Tokens::get(ui.ctx());
     let k = k(ui);
     let (rect, resp) = ui.allocate_exact_size(vec2(width, 22.0 * k), Sense::click_and_drag());
@@ -122,7 +122,7 @@ fn row(ui: &mut Ui, label: &str, value: f32, range: (f32, f32), checker: bool, b
 }
 
 /// A section heading with a rule running to the end of the row ("RGB ——").
-fn heading(ui: &mut Ui, text: &str) {
+pub(super) fn heading(ui: &mut Ui, text: &str) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
         let g = ui.painter().layout_no_wrap(text.to_string(), egui::FontId::proportional(12.0), t.text);

@@ -36,6 +36,8 @@ const TOOLS: Spec = Spec { key: "tools", title: ("Инструменты", "Tool
 const LAYERS: Spec = Spec { key: "layers", title: ("Слои", "Layers"), size: (270.0, 400.0), min: (200.0, 150.0), at: (-278.0, 196.0), resizable: true, scroll: false };
 const HISTORY: Spec = Spec { key: "history", title: ("Журнал", "History"), size: (240.0, 300.0), min: (200.0, 120.0), at: (-500.0, 196.0), resizable: true, scroll: false };
 const PAGES: Spec = Spec { key: "pages", title: ("Страницы", "Pages"), size: (150.0, 440.0), min: (110.0, 160.0), at: (-690.0, 196.0), resizable: true, scroll: false };
+const NODES: Spec = Spec { key: "grade-nodes", title: ("Узлы", "Nodes"), size: (560.0, 320.0), min: (260.0, 160.0), at: (-860.0, -360.0), resizable: true, scroll: false };
+const GRADE: Spec = Spec { key: "grade-panel", title: ("Цветокоррекция", "Color Grade"), size: (340.0, 560.0), min: (260.0, 200.0), at: (-360.0, 120.0), resizable: true, scroll: true };
 const COLORS: Spec = Spec { key: "colors", title: ("Палитра", "Colors"), size: (570.0, 388.0), min: (200.0, 150.0), at: (100.0, -428.0), resizable: true, scroll: true };
 
 static EMBED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -86,6 +88,12 @@ pub fn show(app: &mut PhotocraftApp, ctx: &Context) {
     app.perf.span("w_colors", crate::gpu_canvas::now_ms() - tw);
     if closed {
         app.ui.panels.color = false;
+    }
+    if app.ui.panels.grade_nodes && window(app, ctx, &NODES, super::grade_nodes::body) {
+        app.ui.panels.grade_nodes = false;
+    }
+    if app.ui.panels.grade_panel && window(app, ctx, &GRADE, super::grade_panel::body) {
+        app.ui.panels.grade_panel = false;
     }
     if super::pdf::pages_open() && window(app, ctx, &PAGES, super::pdf::pages_body) {
         super::pdf::set_pages_open(false);

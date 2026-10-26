@@ -13,6 +13,9 @@ pub mod refs;
 pub mod colors;
 mod icon_data;
 pub mod icon_actions;
+pub mod grade_nodes;
+pub mod grade_panel;
+pub mod grade_ui;
 pub mod icon_sheet;
 pub mod history;
 pub mod icons;
@@ -270,6 +273,8 @@ fn menu_row(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             ("win-layers", "Слои (F7)", "Layers (F7)", app.ui.panels.layers),
             ("win-history", "Журнал (F6)", "History (F6)", app.ui.panels.history),
             ("win-tools", "Инструменты (F5)", "Tools (F5)", app.ui.panels.toolbar),
+            ("win-grade", "Цветокоррекция", "Color Grade", app.ui.panels.grade_panel),
+            ("win-nodes", "Узлы цветокоррекции", "Grade Nodes", app.ui.panels.grade_nodes),
         ];
         for (k, (icon, r, e, on)) in rows.into_iter().enumerate() {
             if icons::button(ui, icon, u(&ctx, 30.0), on, true, if ru { r } else { e }).clicked() {
@@ -278,7 +283,9 @@ fn menu_row(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                     0 => p.color = !p.color,
                     1 => p.layers = !p.layers,
                     2 => p.history = !p.history,
-                    _ => p.toolbar = !p.toolbar,
+                    3 => p.toolbar = !p.toolbar,
+                    4 => p.grade_panel = !p.grade_panel,
+                    _ => p.grade_nodes = !p.grade_nodes,
                 }
             }
         }

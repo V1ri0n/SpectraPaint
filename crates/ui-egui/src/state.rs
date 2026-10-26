@@ -438,6 +438,11 @@ pub struct Panels {
     /// own. Each OS window is presented every frame, which is slow on a weak graphics card.
     #[serde(default)]
     pub pdn_embed: bool,
+    /// Paint.NET layout: the node editor and the colour panel of node-based colour grading.
+    #[serde(default)]
+    pub grade_nodes: bool,
+    #[serde(default)]
+    pub grade_panel: bool,
 }
 
 impl Default for Panels {
@@ -462,6 +467,8 @@ impl Default for Panels {
             pdn_windows: Default::default(),
             pdn_colors_more: true,
             pdn_embed: false,
+            grade_nodes: false,
+            grade_panel: false,
         }
     }
 }

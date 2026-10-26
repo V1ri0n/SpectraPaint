@@ -276,6 +276,9 @@ pub(crate) const TOPS: &[Top] = &[
             Item("image.adjustments.equalize", "Выровнять яркость", "Equalize"),
             Item("image.autoContrast", "Автоконтраст", "Auto Contrast"),
             Item("image.autoColor", "Автоцвет", "Auto Color"),
+            Sep,
+            // Colour grading with nodes, the Resolve way (engine: grade_cmds.rs, windows: grade_nodes.rs).
+            Item("grade.new", "Цветокоррекция узлами...", "Node Color Grade..."),
         ],
     },
     Top {

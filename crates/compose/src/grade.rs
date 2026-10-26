@@ -86,6 +86,17 @@ fn curve_table(points: &[[f32; 2]], periodic: bool) -> Option<Vec<f32>> {
     )
 }
 
+/// The table a "x versus change" curve is read from, for drawing it as it is applied: `[x, change]`
+/// points over x in 0..=1 (None: no change).
+pub fn delta_curve_table(points: &[[f32; 2]], periodic: bool) -> Option<Vec<f32>> {
+    curve_table(points, periodic)
+}
+
+/// The change a [`delta_curve_table`] gives at `x`.
+pub fn delta_curve_at(table: &[f32], x: f32, periodic: bool) -> f32 {
+    table_at(table, x, periodic)
+}
+
 fn table_at(t: &[f32], x: f32, periodic: bool) -> f32 {
     let x = if periodic { x.rem_euclid(1.0) } else { x.clamp(0.0, 1.0) };
     let p = x * (TABLE - 1) as f32;
