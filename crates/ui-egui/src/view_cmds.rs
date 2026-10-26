@@ -589,6 +589,7 @@ fn wraps(id: &str) -> bool {
             | "file.automate.mergeToHdrPro"
             | "file.automate.lensCorrection"
             | "file.export.layersToFiles"
+            | "file.export.scales"
             | "file.export.layerCompsToFiles"
             | "file.export.artboardsToFiles"
             | "file.export.artboardsToPdf"
@@ -1237,6 +1238,15 @@ fn front(app: &mut PhotocraftApp, id: &str, params: &Value) -> Option<Result<Val
                 app,
                 json!({"dir": dir, "prefix": name.rsplit_once('.').map_or(name.as_str(), |(a, _)| a), "format": "png", "visibleOnly": true}),
                 json!({"format": ["png", "jpg", "psd", "tiff", "webp", "bmp"]}),
+            )
+        }
+        // The document at 1×, 2×, … (FigCraft's export sizes): a folder, a name, the scales as text.
+        "file.export.scales" => {
+            let (_, _, name) = doc?;
+            dialog(
+                app,
+                json!({"dir": dir, "prefix": name.rsplit_once('.').map_or(name.as_str(), |(a, _)| a), "scales": "1, 2, 3", "format": "png"}),
+                json!({"format": ["png", "jpg", "webp", "tiff", "bmp"]}),
             )
         }
         "file.export.layerCompsToFiles" | "file.export.artboardsToFiles" => {

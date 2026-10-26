@@ -27,6 +27,7 @@ pub static CATALOG: &[(&[&str], &str, Option<&str>, &str)] = &[
     (&["File", "Export"], "Artboards to Files…", None, "file.export.artboardsToFiles"),
     (&["File", "Export"], "Artboards to PDF…", None, "file.export.artboardsToPdf"),
     (&["File", "Export"], "Layers to Files…", None, "file.export.layersToFiles"),
+    (&["File", "Export"], "Export at Several Scales…", None, "file.export.scales"),
     (&["File", "Export"], "Layer Comps to Files…", None, "file.export.layerCompsToFiles"),
     (&["File", "Export"], "---", None, "---"),
     (&["File", "Export"], "Color Lookup Tables…", None, "file.export.colorLookupTables"),

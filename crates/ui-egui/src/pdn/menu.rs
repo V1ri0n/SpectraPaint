@@ -47,6 +47,7 @@ pub(crate) const TOPS: &[Top] = &[
                     Item("file.export.quickExportAsPng", "Быстрый экспорт", "Quick Export"),
                     Item("file.export.exportAs", "Экспортировать как...", "Export As..."),
                     Item("file.export.layersToFiles", "Слои в файлы...", "Layers to Files..."),
+                    Item("file.export.scales", "Экспорт в нескольких масштабах...", "Export at Several Scales..."),
                 ],
             ),
             Item("pdn.importPdf", "Импорт PDF...", "Import PDF..."),
@@ -193,6 +194,49 @@ pub(crate) const TOPS: &[Top] = &[
             Item("layer.hideLayers", "Переключить видимость слоя", "Toggle Layer Visibility"),
             Item("pdn.layerProperties", "Свойства слоя...", "Layer Properties..."),
             Item("pdn.glow", "Свечение объекта...", "Object Glow..."),
+            Sep,
+            // Moving several selected layers relative to each other (engine: layer_multi_cmds.rs) and the
+            // boolean operations of shape layers (layer.combineShapes.*, from FigCraft's `bool` group).
+            Sub(
+                "Выровнять слои",
+                "Align Layers",
+                &[
+                    Item("layer.align.leftEdges", "По левому краю", "Left Edges"),
+                    Item("layer.align.horizontalCenters", "По центру по горизонтали", "Horizontal Centers"),
+                    Item("layer.align.rightEdges", "По правому краю", "Right Edges"),
+                    Sep,
+                    Item("layer.align.topEdges", "По верхнему краю", "Top Edges"),
+                    Item("layer.align.verticalCenters", "По центру по вертикали", "Vertical Centers"),
+                    Item("layer.align.bottomEdges", "По нижнему краю", "Bottom Edges"),
+                ],
+            ),
+            Sub(
+                "Распределить слои",
+                "Distribute Layers",
+                &[
+                    Item("layer.distribute.horizontally", "Равные промежутки по горизонтали", "Horizontal Spacing"),
+                    Item("layer.distribute.vertically", "Равные промежутки по вертикали", "Vertical Spacing"),
+                    Sep,
+                    Item("layer.distribute.leftEdges", "По левым краям", "Left Edges"),
+                    Item("layer.distribute.horizontalCenters", "По центрам по горизонтали", "Horizontal Centers"),
+                    Item("layer.distribute.rightEdges", "По правым краям", "Right Edges"),
+                    Sep,
+                    Item("layer.distribute.topEdges", "По верхним краям", "Top Edges"),
+                    Item("layer.distribute.verticalCenters", "По центрам по вертикали", "Vertical Centers"),
+                    Item("layer.distribute.bottomEdges", "По нижним краям", "Bottom Edges"),
+                ],
+            ),
+            Sub(
+                "Объединение фигур",
+                "Combine Shapes",
+                &[
+                    Item("layer.combineShapes.unite", "Объединить", "Unite"),
+                    Item("layer.combineShapes.subtractFrontShape", "Вычесть переднюю", "Subtract Front"),
+                    Item("layer.combineShapes.intersectShapeAreas", "Пересечение", "Intersect"),
+                    Item("layer.combineShapes.excludeOverlappingShapes", "Исключить пересечение", "Exclude Overlap"),
+                    Item("layer.combineShapes.mergeShapeComponents", "Слить компоненты", "Merge Components"),
+                ],
+            ),
         ],
     },
     Top {

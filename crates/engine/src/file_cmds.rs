@@ -1209,6 +1209,88 @@ fn layers_to_files(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"files": files}))
 }
 
+/// Most scales one `file.export.scales` run writes, and the range of one scale. A scale is a
+/// factor of the document's size (1 = as it is, 2 = twice as wide and high, 0.5 = half).
+fn bad_params(cmd: &str, msg: impl Into<String>) -> EngineError {
+    EngineError::BadParams { cmd: cmd.into(), msg: msg.into() }
+}
+
+const MAX_SCALES: usize = 8;
+const SCALE_RANGE: std::ops::RangeInclusive<f64> = 0.05..=16.0;
+
+/// The scales named by `p["scales"]`: an array of numbers or a text such as `"1, 2, 3"` (what the
+/// export dialog's text field gives); `[1, 2]` when absent. Sorted, without repeats.
+fn scales_param(p: &Value, cmd: &str) -> Result<Vec<f64>> {
+    let raw: Vec<f64> = match p.get("scales") {
+        None | Some(Value::Null) => vec![1.0, 2.0],
+        Some(Value::Array(a)) => a.iter().map(|v| v.as_f64().ok_or_else(|| bad_params(cmd, "`scales` holds numbers"))).collect::<Result<_>>()?,
+        Some(Value::String(t)) => t
+            .split([',', ';', ' '])
+            .map(|w| w.trim().trim_end_matches(['x', 'X']))
+            .filter(|w| !w.is_empty())
+            .map(|w| w.replace(',', ".").parse::<f64>().map_err(|_| bad_params(cmd, format!("`{w}` is not a scale"))))
+            .collect::<Result<_>>()?,
+        Some(_) => return Err(bad_params(cmd, "`scales` is a list of numbers or text like \"1, 2, 3\"")),
+    };
+    let mut scales = Vec::new();
+    for k in raw {
+        if !k.is_finite() || !SCALE_RANGE.contains(&k) {
+            return Err(bad_params(cmd, format!("a scale must be between {} and {}", SCALE_RANGE.start(), SCALE_RANGE.end())));
+        }
+        if !scales.iter().any(|s: &f64| (s - k).abs() < 1e-9) {
+            scales.push(k);
+        }
+    }
+    if scales.is_empty() || scales.len() > MAX_SCALES {
+        return Err(bad_params(cmd, format!("give between 1 and {MAX_SCALES} scales")));
+    }
+    scales.sort_by(f64::total_cmp);
+    Ok(scales)
+}
+
+/// A scale as it is written in a file name: `2x`, `1.5x`.
+fn scale_suffix(k: f64) -> String {
+    let t = format!("{k:.3}");
+    format!("{}x", t.trim_end_matches('0').trim_end_matches('.'))
+}
+
+fn export_scales(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "file.export.scales";
+    let dir = str_param(p, "dir", cmd).or_else(|_| str_param(p, "output", cmd))?.to_string();
+    let names = export_scales_with(s, p, |name, bytes| write_file(&join(&dir, name), bytes))?;
+    let files: Vec<String> = names.iter().map(|name| join(&dir, name)).collect();
+    Ok(json!({"files": files}))
+}
+
+/// The files of `file.export.scales`, streamed to `write` as a filename plus its bytes (the way
+/// [`export_layers_with`] does it): the document as it is, once per scale, resized with bicubic
+/// resampling. Scale 1 is `<prefix>.<format>`, others `<prefix>@2x.<format>`. Returns the names.
+pub fn export_scales_with(s: &Session, p: &Value, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Vec<String>> {
+    let cmd = "file.export.scales";
+    let scales = scales_param(p, cmd)?;
+    let format = p.get("format").and_then(Value::as_str).unwrap_or("png").trim_start_matches('.').to_ascii_lowercase();
+    let save = SaveOpts::from_params(s, p, cmd)?;
+    let d = s.active().ok_or(EngineError::NoDocument)?;
+    let prefix = sanitize(&p.get("prefix").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| stem(&d.doc.name)));
+    let (w, h) = (f64::from(d.doc.size.width), f64::from(d.doc.size.height));
+    let mut written = Vec::new();
+    for k in scales {
+        let name = if (k - 1.0).abs() < 1e-9 { format!("{prefix}.{format}") } else { format!("{prefix}@{}.{format}", scale_suffix(k)) };
+        let (bytes, _warnings) = if (k - 1.0).abs() < 1e-9 {
+            encode(&d.doc, &name, save)?
+        } else {
+            // The resize is the document command, run on a copy in a session of its own.
+            let mut t = Session::new();
+            t.add_document((*d.doc).clone(), None);
+            t.execute("image.imageSize", json!({"width": (w * k).round().max(1.0), "height": (h * k).round().max(1.0), "resample": "bicubic"}))?;
+            encode(&t.active().ok_or(EngineError::NoDocument)?.doc, &name, save)?
+        };
+        write(&name, &bytes)?;
+        written.push(name);
+    }
+    Ok(written)
+}
+
 /// The bodies of `file.export.layersToFiles`, streamed to `write` as a single-component filename
 /// plus its bytes: one file per exported layer (top to bottom, like Photoshop's numbering),
 /// encoded but never touched as a path. Automation writes exactly these bytes beneath its write
@@ -1579,6 +1661,15 @@ pub fn specs() -> Vec<CommandSpec> {
             r##"{"dir":folder,"format":"png|jpg|psd|tiff|…"="png","prefix":str=document name,"visibleOnly":bool=true,"quality":0..12?,"tiffLayers":bool=false,"tgaBits":24|32?,"dpxBits":8|10|12|16? (DPX: bits per sample; unset, 8 for an 8-bit document, else 16)} → {files}"##,
             native_doc,
             layers_to_files
+        ),
+        spec!(
+            "file.export.scales",
+            "Export at Several Scales…",
+            &["File", "Export"],
+            None,
+            r##"{"dir":folder,"scales":[1,2,3]|"1, 2, 3"=[1,2] (each 0.05..16, up to 8),"format":"png|jpg|webp|tiff|bmp"="png","prefix":str=document name,"quality":0..12?} (one file per scale: name.png, name@2x.png, …; the document is resized with bicubic resampling)"##,
+            native_doc,
+            export_scales
         ),
         spec!(
             "file.export.colorLookupTables",

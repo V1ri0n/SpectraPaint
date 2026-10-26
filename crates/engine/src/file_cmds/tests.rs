@@ -1022,3 +1022,32 @@ fn reveal_in_finder_reveals_the_documents_saved_path() {
     assert_eq!(r["program"], json!(program));
     assert_eq!(r["args"], json!(args));
 }
+
+/// `file.export.scales` writes the document once per scale, resized, named `name@2x.png`.
+#[test]
+fn export_at_several_scales_resizes_and_names_each_file() {
+    let s = session(16, 8, 8);
+    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+    let names = export_scales_with(&s, &json!({"scales": "1, 2x, 0.5", "format": "png", "prefix": "icon"}), |n, b| {
+        files.push((n.to_string(), b.to_vec()));
+        Ok(())
+    })
+    .unwrap();
+    // Smallest first, 1× without a suffix.
+    assert_eq!(names, ["icon@0.5x.png", "icon.png", "icon@2x.png"]);
+    let size = |bytes: &[u8]| {
+        let d = photocraft_io::import("x.png", bytes).unwrap().document;
+        (d.size.width, d.size.height)
+    };
+    assert_eq!(files.iter().map(|(_, b)| size(b)).collect::<Vec<_>>(), [(8, 4), (16, 8), (32, 16)]);
+    // The document itself is untouched.
+    assert_eq!((doc(&s).size.width, doc(&s).size.height), (16, 8));
+    // Default scales, repeats dropped; bad input is an error, not a panic.
+    let default = export_scales_with(&s, &json!({}), |_, _| Ok(())).unwrap();
+    assert_eq!(default.len(), 2);
+    assert_eq!(export_scales_with(&s, &json!({"scales": [2, 2.0, 2]}), |_, _| Ok(())).unwrap().len(), 1);
+    for bad in [json!({"scales": []}), json!({"scales": [0]}), json!({"scales": [99]}), json!({"scales": "two"}), json!({"scales": [1, 2, 3, 4, 5, 6, 7, 8, 9]}), json!({"scales": {}})] {
+        assert!(export_scales_with(&s, &bad, |_, _| Ok(())).is_err(), "{bad}");
+    }
+    assert_eq!((scale_suffix(2.0), scale_suffix(1.5), scale_suffix(0.5)), ("2x".to_string(), "1.5x".to_string(), "0.5x".to_string()));
+}
