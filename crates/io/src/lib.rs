@@ -61,6 +61,7 @@ pub mod raw;
 pub mod slices_map;
 pub mod smart_map;
 pub mod svg;
+mod svg_write;
 mod text_import;
 pub mod text_styles_map;
 pub mod tiff_layers;
@@ -381,6 +382,9 @@ fn export_stages(doc: &Document, name_or_ext: &str, opts: &ExportOptions, ctl: &
     let ext = extension(name_or_ext);
     if ext == "pdn" {
         return pdn::export(doc, ctl);
+    }
+    if ext == "svg" {
+        return svg_write::export(doc, ctl);
     }
     if affinity::EXTENSIONS.contains(&ext.as_str()) {
         return Err(IoError::Unsupported("Affinity export is not implemented; save a new PSD, PNG or .pcraft copy".into()));

@@ -591,6 +591,7 @@ fn wraps(id: &str) -> bool {
             | "file.export.layersToFiles"
             | "file.export.scales"
             | "layer.batchRename"
+            | "path.imageTrace"
             | "layer.findReplaceNames"
             | "file.export.layerCompsToFiles"
             | "file.export.artboardsToFiles"
@@ -1243,6 +1244,12 @@ fn front(app: &mut PhotocraftApp, id: &str, params: &Value) -> Option<Result<Val
             )
         }
         // Several layers named from a pattern; names found and replaced across the document.
+        // A picture turned into vector shapes, one per colour (engine: image_trace_cmds.rs).
+        "path.imageTrace" => dialog(
+            app,
+            json!({"source": "layer", "mode": "color", "colors": 8, "tolerance": 1.0, "minArea": 4, "ignoreWhite": false}),
+            json!({"source": ["layer", "image"], "mode": ["color", "bw", "grayscale"]}),
+        ),
         "layer.batchRename" => dialog(app, json!({"pattern": "Layer {n}", "start": 1, "pad": 0}), json!({})),
         "layer.findReplaceNames" => dialog(app, json!({"find": "", "replace": "", "matchCase": false, "scope": "all"}), json!({"scope": ["all", "selected"]})),
         // The document at 1×, 2×, … (FigCraft's export sizes): a folder, a name, the scales as text.

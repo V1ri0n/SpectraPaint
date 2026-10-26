@@ -202,6 +202,7 @@ pub(crate) const TOPS: &[Top] = &[
             Item("layer.showOnlyThis", "Показать только этот слой", "Show Only This Layer"),
             Item("layer.batchRename", "Переименовать слои...", "Rename Layers..."),
             Item("layer.findReplaceNames", "Найти и заменить в названиях...", "Find and Replace in Names..."),
+            Item("path.imageTrace", "Трассировка изображения...", "Image Trace..."),
             Sep,
             // Moving several selected layers relative to each other (engine: layer_multi_cmds.rs) and the
             // boolean operations of shape layers (layer.combineShapes.*, from FigCraft's `bool` group).

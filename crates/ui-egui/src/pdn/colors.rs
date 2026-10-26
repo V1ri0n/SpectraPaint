@@ -13,6 +13,8 @@ use crate::widgets;
 /// Paint.NET's sizes, in screen pixels (the window's own scale is `1 / pixels_per_point`).
 const WHEEL_PX: f32 = 175.0;
 const SWATCH_PX: f32 = 16.5;
+/// Most colours the user adds to the palette.
+const MAX_CUSTOM: usize = 32;
 
 fn k(ui: &Ui) -> f32 {
     1.0 / ui.ctx().pixels_per_point()
@@ -286,7 +288,7 @@ fn palette_tools(ui: &mut Ui, primary: [f32; 4], custom: &mut Vec<[f32; 4]>) {
         ui.painter().rect_filled(plus, 0.0, Color32::WHITE);
         ui.painter().line_segment([plus.left_center() + vec2(1.5, 0.0), plus.right_center() - vec2(1.5, 0.0)], Stroke::new(1.4, Color32::BLACK));
         ui.painter().line_segment([plus.center_top() + vec2(0.0, 1.5), plus.center_bottom() - vec2(0.0, 1.5)], Stroke::new(1.4, Color32::BLACK));
-        if resp.on_hover_text(if ru { "Добавить основной цвет в палитру" } else { "Add the primary color to the palette" }).clicked() && custom.len() < 32 {
+        if resp.on_hover_text(if ru { "Добавить основной цвет в палитру" } else { "Add the primary color to the palette" }).clicked() && custom.len() < MAX_CUSTOM {
             custom.push(primary);
         }
         let (r2, resp2) = ui.allocate_exact_size(vec2(36.0, 22.0) * kk, Sense::click());
@@ -308,7 +310,66 @@ fn palette_tools(ui: &mut Ui, primary: [f32; 4], custom: &mut Vec<[f32; 4]>) {
         if clear {
             custom.clear();
         }
+        // Colour harmonies of the primary colour: a click adds the rule's colours to the palette.
+        let (r3, resp3) = ui.allocate_exact_size(vec2(44.0, 22.0) * kk, Sense::click());
+        ui.painter().rect_filled(r3, 0.0, Color32::from_rgb(40, 40, 40));
+        ui.painter().rect_stroke(r3, 0.0, Stroke::new(1.0, if resp3.hovered() { t.accent } else { t.text_dim }), egui::StrokeKind::Inside);
+        let hues = harmony_colors(primary, "triadic", 3);
+        for (i, col) in hues.iter().enumerate() {
+            let cell = Rect::from_min_size(r3.min + vec2(4.0 + i as f32 * 8.0, 3.0) * kk, vec2(7.0, 16.0) * kk);
+            ui.painter().rect_filled(cell, 0.0, to32(*col));
+        }
+        crate::icons::paint(ui, Rect::from_center_size(pos2(r3.right() - 8.0 * kk, r3.center().y), vec2(10.0, 10.0) * kk), "chevron-down", 9.0 * kk, t.text_dim);
+        let mut added: Vec<[f32; 4]> = Vec::new();
+        egui::Popup::menu(&resp3.on_hover_text(if ru { "Гармонии основного цвета" } else { "Harmonies of the primary color" }))
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClick)
+            .show(|ui| {
+                ui.set_min_width(220.0 * kk);
+                for (id, en, ru_name) in HARMONIES {
+                    let colors = harmony_colors(primary, id, 5);
+                    let (rr, rresp) = ui.allocate_exact_size(vec2(ui.available_width().max(220.0 * kk), 24.0 * kk), Sense::click());
+                    if rresp.hovered() {
+                        ui.painter().rect_filled(rr, 0.0, t.hover);
+                    }
+                    let name = if ru { *ru_name } else { *en };
+                    ui.painter().text(rr.left_center() + vec2(6.0, 0.0) * kk, egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.5), t.text);
+                    // A strip of the colours the rule gives, on the right.
+                    let n = colors.len().max(1) as f32;
+                    let strip = Rect::from_min_size(pos2(rr.right() - 6.0 * kk - 14.0 * kk * n, rr.top() + 4.0 * kk), vec2(14.0 * kk * n, 16.0 * kk));
+                    for (i, col) in colors.iter().enumerate() {
+                        ui.painter().rect_filled(Rect::from_min_size(strip.min + vec2(14.0 * kk * i as f32, 0.0), vec2(14.0 * kk, 16.0 * kk)), 0.0, to32(*col));
+                    }
+                    if rresp.clicked() {
+                        added.extend(colors);
+                    }
+                }
+            });
+        for col in added {
+            if custom.len() < MAX_CUSTOM && !custom.contains(&col) {
+                custom.push(col);
+            }
+        }
     });
+}
+
+/// `(rule id, English name, Russian name)` of the harmonies the palette offers: the engine's rules.
+const HARMONIES: &[(&str, &str, &str)] = &[
+    ("complementary", "Complementary", "Комплементарная"),
+    ("splitComplementary", "Split complementary", "Раздельно-комплементарная"),
+    ("analogous", "Analogous", "Аналогичная"),
+    ("triadic", "Triadic", "Триада"),
+    ("tetradic", "Tetradic", "Тетрада"),
+    ("square", "Square", "Квадрат"),
+    ("monochromatic", "Monochromatic", "Монохромная"),
+    ("shades", "Shades", "Тени"),
+    ("tints", "Tints", "Оттенки светлее"),
+    ("tones", "Tones", "Тона"),
+];
+
+/// The colours of harmony `rule` for `base` (alpha kept), by the engine's wheel.
+fn harmony_colors(base: [f32; 4], rule: &str, count: usize) -> Vec<[f32; 4]> {
+    let rgb = [base[0], base[1], base[2]].map(|v| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 });
+    photocraft_engine::harmony_cmds::harmony(rgb, rule, count).unwrap_or_default().into_iter().map(|c| [c[0], c[1], c[2], base[3]]).collect()
 }
 
 /// The More / Less button: a square button with a blue outline.
@@ -528,4 +589,30 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut Ui) {
         d.insert_temp(state_id, secondary);
         d.insert_temp(memo_id, (h, s));
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The popup offers exactly the engine's rules, each with a Russian name, in the same order.
+    #[test]
+    fn harmony_list_matches_the_engine_rules() {
+        let engine: Vec<&str> = photocraft_engine::harmony_cmds::RULES.iter().map(|r| r.0).collect();
+        let ours: Vec<&str> = HARMONIES.iter().map(|h| h.0).collect();
+        assert_eq!(ours, engine);
+        assert!(HARMONIES.iter().all(|h| !h.1.is_empty() && !h.2.is_empty()));
+    }
+
+    #[test]
+    fn harmonies_keep_the_alpha_and_ignore_a_broken_base() {
+        let red = [1.0, 0.0, 0.0, 0.4];
+        let c = harmony_colors(red, "complementary", 5);
+        assert_eq!(c.len(), 2);
+        assert!(c.iter().all(|x| (x[3] - 0.4).abs() < 1e-6));
+        assert!((c[1][1] - 1.0).abs() < 1e-5 && (c[1][2] - 1.0).abs() < 1e-5, "cyan opposite red: {:?}", c[1]);
+        // A NaN component reads as zero rather than spreading.
+        assert!(harmony_colors([f32::NAN, 0.0, 0.0, 1.0], "triadic", 3).iter().flatten().all(|v| v.is_finite()));
+        assert!(harmony_colors(red, "nope", 3).is_empty());
+    }
 }

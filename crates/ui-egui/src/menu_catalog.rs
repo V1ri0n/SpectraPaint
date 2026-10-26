@@ -266,6 +266,7 @@ pub static CATALOG: &[(&[&str], &str, Option<&str>, &str)] = &[
     (&["Layer"], "---", None, "---"),
     (&["Layer"], "Rename Layer", None, "layer.renameLayer"),
     (&["Layer"], "Rename Layers…", None, "layer.batchRename"),
+    (&["Layer"], "Image Trace…", None, "path.imageTrace"),
     (&["Layer"], "Find and Replace in Names…", None, "layer.findReplaceNames"),
     (&["Layer"], "Show Only This Layer", None, "layer.showOnlyThis"),
     (&["Layer", "Layer Style"], "Blending Options…", None, "layer.layerStyle.blendingOptions"),

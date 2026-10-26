@@ -57,6 +57,7 @@ const SAVE_FILTERS: &[(&str, &[&str])] = &[
     ("Spectra Paint", &["pcraft"]),
     ("OpenRaster", &["ora"]),
     ("Paint.NET", &["pdn"]),
+    ("SVG", &["svg"]),
     ("PNG", &["png"]),
     ("JPEG", &["jpg"]),
     ("WebP", &["webp"]),
@@ -744,7 +745,8 @@ mod tests {
     /// Every flat format Save As offers is one PhotoCraft writes, and ICO is among them (#4357).
     #[test]
     fn save_as_offers_only_writable_formats_including_ico() {
-        let layered = ["psd", "psb", "pcraft", "ora", "pdn"];
+        // SVG is written by the SVG exporter (vector layers stay vector), not a pixel codec.
+        let layered = ["psd", "psb", "pcraft", "ora", "pdn", "svg"];
         for (name, exts) in SAVE_FILTERS {
             for ext in exts.iter().filter(|e| !layered.contains(e)) {
                 let format = photocraft_codecs::from_extension(ext).unwrap_or_else(|| panic!("{name}: .{ext} is no known format"));
