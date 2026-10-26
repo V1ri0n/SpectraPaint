@@ -89,6 +89,8 @@ pub struct PresetState {
     pub layer_defaults: BTreeMap<String, Value>,
     /// Swatches panel library.
     pub swatches: Vec<Group<swatches::Swatch>>,
+    /// Saved grades of node-based colour grading.
+    pub grade_looks: Vec<crate::grade_cmds::GradeLook>,
     /// Bumped on every preset change (UIs key thumbnail caches on it).
     pub rev: u64,
 }
@@ -108,6 +110,7 @@ impl Default for PresetState {
             clone: Default::default(),
             layer_defaults: BTreeMap::new(),
             swatches: swatches::builtin(),
+            grade_looks: Vec::new(),
             rev: 0,
         }
     }
@@ -139,6 +142,9 @@ struct Persisted {
     #[serde(default)]
     layer_defaults: Option<BTreeMap<String, Value>>,
     swatches: Option<Vec<Group<swatches::Swatch>>>,
+    // Read look by look: a bad entry must not discard the others.
+    #[serde(default)]
+    grade_looks: Option<Value>,
 }
 
 impl PresetState {
@@ -156,6 +162,7 @@ impl PresetState {
             custom_shapes: Some(s.edit_state.custom_shapes.clone()),
             layer_defaults: Some(self.layer_defaults.clone()),
             swatches: Some(self.swatches.clone()),
+            grade_looks: Some(json!(self.grade_looks)),
         };
         serde_json::to_value(p).unwrap_or(Value::Null)
     }
@@ -214,6 +221,9 @@ impl Session {
             // A hand-edited preferences file can't make the library unbounded.
             crate::swatch_cmds::cap_library(&mut g);
             self.presets.swatches = g;
+        }
+        if let Some(l) = p.grade_looks {
+            self.presets.grade_looks = crate::grade_cmds::load_looks(l);
         }
         self.presets.rev += 1;
     }

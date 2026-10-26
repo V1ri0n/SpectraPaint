@@ -1575,7 +1575,8 @@ pub fn adjustment_on_gpu(adj: &Adjustment, mode: photocraft_color::ColorMode) ->
         photocraft_color::ColorMode::Cmyk => cmyk_channel_adjustment(adj),
         _ => false,
     };
-    !tone_in_space && !own_channels
+    // A node-based grade (windows, qualifiers, many nodes) is evaluated on the CPU.
+    !tone_in_space && !own_channels && !matches!(adj, Adjustment::NodeGrade { .. })
 }
 
 /// A tone transfer as the shader's `t_decode`/`t_encode` exponent (0: the sRGB curve).
@@ -1716,7 +1717,7 @@ pub fn adjustment_program(adj: &Adjustment, transfer: Transfer, depth: photocraf
             (16, p, Some(rows))
         }
         // Identity on the CPU too (not evaluated there).
-        Adjustment::ColorLookup { .. } | Adjustment::Unsupported { .. } => (0, p, None),
+        Adjustment::ColorLookup { .. } | Adjustment::Unsupported { .. } | Adjustment::NodeGrade { .. } => (0, p, None),
     }
 }
 

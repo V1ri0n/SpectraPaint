@@ -580,6 +580,9 @@ fn levels_write(v: &mut Vec<u8>, c: &LevelsChannel) {
     put16(v, (c.gamma * 100.0).round().clamp(1.0, 999.0) as u16);
 }
 
+/// Side of the 3D LUT a node-based grade is baked to for a PSD.
+pub const BAKED_LUT_SIZE: usize = 33;
+
 /// Serializes an adjustment into its PSD blocks: `(key, data)` pairs
 /// (Brightness/Contrast also writes a `CgEd` descriptor). Every evaluated kind has an
 /// encoding; the result is empty only for an [`Adjustment::Unsupported`] with a malformed key.
@@ -778,6 +781,18 @@ pub fn write(adj: &Adjustment) -> Vec<([u8; 4], Vec<u8>)> {
                 v.extend_from_slice(&pct(row[3]));
             }
             return vec![(*b"mixr", v)];
+        }
+        // Photoshop has no node graphs: the grade goes out as the Color Lookup it bakes to (33³
+        // entries, windows left out; the exporter warns), so the look survives, the graph does not.
+        Adjustment::NodeGrade { graph } => {
+            let Some(table) = photocraft_compose::grade::bake_lut(graph, BAKED_LUT_SIZE) else { return Vec::new() };
+            return write(&Adjustment::ColorLookup {
+                name: "Color Grade".into(),
+                lut: Some(std::sync::Arc::new(table)),
+                size: BAKED_LUT_SIZE as u32,
+                tetrahedral: true,
+                dither: false,
+            });
         }
         Adjustment::Unsupported { psd_key, raw } => {
             let k = psd_key.as_bytes();

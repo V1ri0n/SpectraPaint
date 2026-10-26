@@ -234,8 +234,19 @@ pub fn apply_depth(adj: &Adjustment, buf: &mut Buffer, transfer: Transfer, depth
                 p[..3].copy_from_slice(&o);
             }
         }
+        // Windows need the canvas: [`apply_in_canvas`] knows it, this has only the buffer.
+        Adjustment::NodeGrade { graph } => crate::grade::apply(graph, buf, buf.rect),
         // Not evaluated: identity (still round-trips through PSD).
         Adjustment::ColorLookup { .. } | Adjustment::Unsupported { .. } => {}
+    }
+}
+
+/// [`apply_in`] for a render of part of the document: `canvas` is the whole canvas, which the
+/// windows of a node-based grade are laid out on.
+pub fn apply_in_canvas(adj: &Adjustment, buf: &mut Buffer, transfer: Transfer, depth: Option<SampleType>, mode: ColorMode, canvas: photocraft_geom::Rect) {
+    match adj {
+        Adjustment::NodeGrade { graph } => crate::grade::apply(graph, buf, canvas),
+        _ => apply_in(adj, buf, transfer, depth, mode),
     }
 }
 

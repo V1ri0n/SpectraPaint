@@ -281,6 +281,11 @@ pub enum Adjustment {
         relative: bool,
         adjustments: [[f32; 4]; 9],
     },
+    /// Colour grading with a graph of nodes (the Resolve way), see [`crate::grade`]. Not a Photoshop
+    /// adjustment: a PSD gets it as a baked Color Lookup, the graph itself lives in `.pcraft`.
+    NodeGrade {
+        graph: crate::grade::NodeGraph,
+    },
     /// A PSD adjustment we can't evaluate yet; preserved raw for round-trip.
     Unsupported {
         psd_key: String,
@@ -307,6 +312,7 @@ impl Adjustment {
             Adjustment::Threshold { .. } => "Threshold",
             Adjustment::GradientMap { .. } => "Gradient Map",
             Adjustment::SelectiveColor { .. } => "Selective Color",
+            Adjustment::NodeGrade { .. } => "Color Grade",
             Adjustment::Unsupported { .. } => "Adjustment",
         }
     }

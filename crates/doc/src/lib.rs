@@ -14,6 +14,7 @@ pub mod analysis;
 pub mod blend_if;
 pub mod comps;
 pub mod effects;
+pub mod grade;
 pub mod mode;
 pub mod pattern;
 pub mod slices;

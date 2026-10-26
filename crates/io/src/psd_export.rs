@@ -541,6 +541,13 @@ impl Ex {
                     if w.is_empty() {
                         self.warnings.push(format!("layer \"{}\": {} adjustment is not yet written to PSD", l.name, a.label()));
                     }
+                    if let photocraft_doc::Adjustment::NodeGrade { graph } = a {
+                        self.warnings.push(format!(
+                            "layer \"{}\": the node graph of a Color Grade cannot be saved to PSD; it is saved as the Color Lookup it bakes to{}",
+                            l.name,
+                            if photocraft_compose::grade::has_windows(graph) { " (without its windows)" } else { "" }
+                        ));
+                    }
                     // Photoshop's `clrL` descriptor has no interpolation setting, so the
                     // reopened layer renders trilinear.
                     if matches!(a, photocraft_doc::Adjustment::ColorLookup { tetrahedral: true, .. }) {

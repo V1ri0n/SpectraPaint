@@ -213,6 +213,8 @@ pub fn from_params(kind: &str, p: &Value, base: Option<&Adjustment>, mode: Color
 pub fn to_params(adj: &Adjustment) -> Value {
     match adj {
         Adjustment::Invert | Adjustment::Unsupported { .. } => json!({}),
+        // The graph is edited with the `grade.*` commands; the whole of it is shown here.
+        Adjustment::NodeGrade { graph } => json!({"graph": graph}),
         Adjustment::BrightnessContrast { brightness, contrast, legacy } => json!({"brightness": brightness, "contrast": contrast, "legacy": legacy}),
         Adjustment::Threshold { level } => json!({"level": (level * 255.0).round()}),
         Adjustment::Posterize { levels } => json!({"levels": levels}),

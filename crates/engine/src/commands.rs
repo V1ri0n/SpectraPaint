@@ -895,6 +895,9 @@ fn build() -> Vec<CommandSpec> {
                     if matches!(adj, Adjustment::Unsupported { .. }) {
                         return Err(EngineError::Other("this adjustment can't be edited (kept as imported)".into()));
                     }
+                    if matches!(adj, Adjustment::NodeGrade { .. }) {
+                        return Err(EngineError::Other("a Color Grade is edited with the grade.* commands (grade.setNode, grade.addNode…)".into()));
+                    }
                     let kind = adjustment_kind(adj);
                     // No params resets to the defaults; otherwise params merge over the current values.
                     *adj = if let Some(eyedropped) = eyedropped {
@@ -1257,6 +1260,7 @@ fn build() -> Vec<CommandSpec> {
     v.extend(crate::actions_edit_cmds::specs());
     v.extend(crate::swatch_cmds::specs());
     v.extend(crate::harmony_cmds::specs());
+    v.extend(crate::grade_cmds::specs());
     v.extend(crate::image_trace_cmds::specs());
     v.extend(crate::retouch_cmds::specs());
     v.extend(crate::redeye_cmds::specs());
@@ -1376,6 +1380,7 @@ pub fn adjustment_kind(a: &Adjustment) -> &'static str {
         Adjustment::GradientMap { .. } => "gradientMap",
         Adjustment::SelectiveColor { .. } => "selectiveColor",
         Adjustment::ColorLookup { .. } => "colorLookup",
+        Adjustment::NodeGrade { .. } => "nodeGrade",
         _ => "invert",
     }
 }
