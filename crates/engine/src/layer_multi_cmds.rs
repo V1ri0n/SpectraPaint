@@ -1185,6 +1185,130 @@ fn rename_layer(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(Value::Null)
 }
 
+/// Layer › Show Only This Layer (FigCraft's "hide others"): every layer that is neither the
+/// layer, nor inside it, nor a group holding it is hidden, and the layer and its groups are shown.
+/// When all the others are hidden already, they are all shown again, so the command toggles.
+fn show_only_this(s: &mut Session, p: &Value) -> Result<Value> {
+    let id = crate::commands::layer_param(s, p)?;
+    let mut restored = false;
+    s.edit("Show Only This Layer", |doc, _| {
+        let me = doc.path_of(id).ok_or(EngineError::NoLayer(id))?;
+        // Paths of the layers to hide: not the layer, not inside it, not one of its groups.
+        let others: Vec<Vec<usize>> = doc.walk().into_iter().map(|(path, _, _)| path).filter(|path| !(path.starts_with(&me) || me.starts_with(path))).collect();
+        restored = others.iter().all(|path| doc.layer_at(path).is_some_and(|l| !l.visible));
+        for path in &others {
+            if let Some(l) = doc.layer_at_mut(path) {
+                l.visible = restored;
+            }
+        }
+        // The layer and the groups it sits in must be visible for it to show.
+        for end in 1..=me.len() {
+            if let Some(l) = doc.layer_at_mut(&me[..end]) {
+                l.visible = true;
+            }
+        }
+        Ok(())
+    })?;
+    Ok(json!({"showAll": restored}))
+}
+
+/// The layers `p` names (`layer`, else the selection, else the active layer), top of the stack
+/// first, the order the Layers panel lists them in.
+fn named_targets(s: &Session, p: &Value) -> Result<Vec<LayerId>> {
+    let ids = targets(s, p)?;
+    let doc = &s.active().ok_or(EngineError::NoDocument)?.doc;
+    let mut ordered: Vec<LayerId> = doc.walk().into_iter().rev().map(|(_, _, l)| l.id).filter(|id| ids.contains(id)).collect();
+    ordered.dedup();
+    Ok(ordered)
+}
+
+/// Layer › Rename Layers…: gives each selected layer a name from a pattern, top to bottom.
+/// `{n}` is the running number (from `start`, zero-padded to `pad` digits) and `{name}` the
+/// layer's old name: `"Button {n}"` makes Button 1, Button 2, …
+fn batch_rename(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "layer.batchRename";
+    let pattern = p.get("pattern").and_then(Value::as_str).filter(|t| !t.trim().is_empty()).ok_or_else(|| bad(cmd, "missing `pattern`"))?.to_string();
+    let start = p.get("start").and_then(Value::as_i64).unwrap_or(1);
+    let pad = p.get("pad").and_then(Value::as_u64).unwrap_or(0).min(8) as usize;
+    let ids = named_targets(s, p)?;
+    let doc = &s.active().ok_or(EngineError::NoDocument)?.doc;
+    let mut renames = Vec::new();
+    for (i, id) in ids.iter().enumerate() {
+        let old = doc.layer(*id).ok_or(EngineError::NoLayer(*id))?.name.clone();
+        let number = format!("{:0pad$}", start.saturating_add(i as i64));
+        let name = pattern.replace("{n}", &number).replace("{name}", &old);
+        let name = name.trim().to_string();
+        if name.is_empty() {
+            return Err(bad(cmd, "the pattern gives an empty name"));
+        }
+        renames.push((*id, name));
+    }
+    if renames.iter().all(|(id, name)| doc.layer(*id).is_some_and(|l| &l.name == name)) {
+        return Ok(json!({"renamed": 0}));
+    }
+    let count = renames.len();
+    s.edit("Rename Layers", |doc, _| {
+        for (id, name) in renames {
+            doc.layer_mut(id).ok_or(EngineError::NoLayer(id))?.name = name;
+        }
+        Ok(())
+    })?;
+    Ok(json!({"renamed": count}))
+}
+
+/// `name` with each match of `find` replaced by `with` (case-insensitive unless `case`).
+fn replace_in_name(name: &str, find: &str, with: &str, case: bool) -> String {
+    let (hay, needle): (Vec<char>, Vec<char>) = (name.chars().collect(), find.chars().collect());
+    let same = |a: char, b: char| if case { a == b } else { a == b || a.to_lowercase().eq(b.to_lowercase()) };
+    let mut out = String::with_capacity(name.len());
+    let mut i = 0;
+    while i < hay.len() {
+        if i + needle.len() <= hay.len() && needle.iter().enumerate().all(|(k, c)| same(hay[i + k], *c)) {
+            out.push_str(with);
+            i += needle.len();
+        } else {
+            out.push(hay[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Layer › Find and Replace in Names…: `scope` "all" (every layer, nested ones too) or "selected".
+fn find_replace_names(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "layer.findReplaceNames";
+    let find = p.get("find").and_then(Value::as_str).filter(|t| !t.is_empty()).ok_or_else(|| bad(cmd, "missing `find`"))?.to_string();
+    let with = p.get("replace").and_then(Value::as_str).unwrap_or("").to_string();
+    let case = p.get("matchCase").and_then(Value::as_bool).unwrap_or(false);
+    let ids: Vec<LayerId> = match p.get("scope").and_then(Value::as_str).unwrap_or("all") {
+        "all" => s.active().ok_or(EngineError::NoDocument)?.doc.walk().into_iter().map(|(_, _, l)| l.id).collect(),
+        "selected" => targets(s, p)?,
+        other => return Err(bad(cmd, format!("`scope` is \"all\" or \"selected\", not `{other}`"))),
+    };
+    let doc = &s.active().ok_or(EngineError::NoDocument)?.doc;
+    let mut renames = Vec::new();
+    for id in ids {
+        let old = &doc.layer(id).ok_or(EngineError::NoLayer(id))?.name;
+        let new = replace_in_name(old, &find, &with, case);
+        if &new != old {
+            if new.trim().is_empty() {
+                return Err(bad(cmd, format!("replacing in \"{old}\" would leave the layer without a name")));
+            }
+            renames.push((id, new));
+        }
+    }
+    let count = renames.len();
+    if count > 0 {
+        s.edit("Find and Replace in Layer Names", |doc, _| {
+            for (id, name) in renames {
+                doc.layer_mut(id).ok_or(EngineError::NoLayer(id))?.name = name;
+            }
+            Ok(())
+        })?;
+    }
+    Ok(json!({"renamed": count}))
+}
+
 fn reverse(s: &mut Session) -> Result<Value> {
     let sel = selected(s);
     s.edit("Reverse", |doc, _| {
@@ -1447,6 +1571,33 @@ pub fn specs() -> Vec<CommandSpec> {
             lock_layers
         ),
         spec!("layer.renameLayer", "Rename Layer", &["Layer"], None, r##"{"layer":id?,"name":str}"##, has_layer, rename_layer),
+        spec!(
+            "layer.showOnlyThis",
+            "Show Only This Layer",
+            &["Layer"],
+            None,
+            r##"{"layer":id?} (hides every other layer; run again to show them all)"##,
+            has_layer,
+            show_only_this
+        ),
+        spec!(
+            "layer.batchRename",
+            "Rename Layers…",
+            &["Layer"],
+            None,
+            r##"{"pattern":str ({n} = number, {name} = old name),"start":int=1,"pad":0..8=0,"layer":id? (none: the selected layers, top to bottom)}"##,
+            has_layer,
+            batch_rename
+        ),
+        spec!(
+            "layer.findReplaceNames",
+            "Find and Replace in Names…",
+            &["Layer"],
+            None,
+            r##"{"find":str,"replace":str="","matchCase":bool=false,"scope":"all|selected"="all"}"##,
+            has_doc,
+            find_replace_names
+        ),
     ]
 }
 
@@ -2572,5 +2723,73 @@ mod tests {
         let v = s.execute("document.inspect", json!({})).unwrap();
         assert_eq!(v["selectedLayers"], json!([a.0, b.0]));
         assert_eq!(v["layers"][0]["selected"], true);
+    }
+}
+
+#[cfg(test)]
+mod layer_names_tests {
+    use super::*;
+
+    /// A document with Background and the named layers above it, bottom to top.
+    fn with_layers(names: &[&str]) -> Session {
+        let mut s = Session::new();
+        s.execute("file.new", json!({"width": 20, "height": 20})).unwrap();
+        for n in names {
+            s.execute("layer.new.layer", json!({"name": n})).unwrap();
+        }
+        s
+    }
+
+    /// Layer names and visibility, bottom to top.
+    fn state(s: &Session) -> Vec<(String, bool)> {
+        s.active().unwrap().doc.walk().into_iter().map(|(_, _, l)| (l.name.clone(), l.visible)).collect()
+    }
+
+    #[test]
+    fn show_only_this_hides_the_others_and_toggles_back() {
+        let mut s = with_layers(&["A", "B", "C"]);
+        let b = s.active().unwrap().doc.walk().into_iter().find(|(_, _, l)| l.name == "B").map(|(_, _, l)| l.id).unwrap();
+        s.execute("layer.showOnlyThis", json!({"layer": b.0})).unwrap();
+        assert_eq!(state(&s), [("Background".into(), false), ("A".into(), false), ("B".into(), true), ("C".into(), false)]);
+        // Again: the others come back; one history step each time.
+        s.execute("layer.showOnlyThis", json!({"layer": b.0})).unwrap();
+        assert!(state(&s).iter().all(|(_, v)| *v));
+        assert!(s.undo());
+        assert_eq!(state(&s).iter().filter(|(_, v)| *v).count(), 1);
+    }
+
+    #[test]
+    fn batch_rename_numbers_the_layers_from_the_top() {
+        let mut s = with_layers(&["A", "B", "C"]);
+        let ids: Vec<u64> = s.active().unwrap().doc.walk().into_iter().filter(|(_, _, l)| l.name != "Background").map(|(_, _, l)| l.id.0).collect();
+        s.execute("layer.select", json!({"layer": ids[0]})).unwrap();
+        for id in &ids[1..] {
+            s.execute("layer.select", json!({"layer": id, "mode": "add"})).unwrap();
+        }
+        let r = s.execute("layer.batchRename", json!({"pattern": "Button {n} ({name})", "start": 9, "pad": 2})).unwrap();
+        assert_eq!(r["renamed"], 3);
+        let names: Vec<String> = state(&s).into_iter().map(|(n, _)| n).collect();
+        // The top layer (C) is number 9.
+        assert_eq!(names, ["Background", "Button 11 (A)", "Button 10 (B)", "Button 09 (C)"]);
+        assert!(s.execute("layer.batchRename", json!({"pattern": "  "})).is_err());
+    }
+
+    #[test]
+    fn find_and_replace_in_names_matches_case_when_asked() {
+        let mut s = with_layers(&["Icon Home", "icon back", "Other"]);
+        let r = s.execute("layer.findReplaceNames", json!({"find": "ICON", "replace": "Glyph"})).unwrap();
+        assert_eq!(r["renamed"], 2);
+        let names: Vec<String> = state(&s).into_iter().map(|(n, _)| n).collect();
+        assert_eq!(names, ["Background", "Glyph Home", "Glyph back", "Other"]);
+        // Nothing matches: no history step, no error.
+        let steps = s.active().unwrap().history.past_len();
+        assert_eq!(s.execute("layer.findReplaceNames", json!({"find": "glyph", "matchCase": true})).unwrap()["renamed"], 0);
+        assert_eq!(s.active().unwrap().history.past_len(), steps);
+        // A replacement that empties a name is refused, an empty find too.
+        assert!(s.execute("layer.findReplaceNames", json!({"find": "Other"})).is_err());
+        assert!(s.execute("layer.findReplaceNames", json!({"find": ""})).is_err());
+        assert!(s.execute("layer.findReplaceNames", json!({"find": "x", "scope": "none"})).is_err());
+        assert_eq!(replace_in_name("Ünï Ünï", "ünï", "x", false), "x x");
+        assert_eq!(replace_in_name("Ünï", "ünï", "x", true), "Ünï");
     }
 }

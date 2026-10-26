@@ -590,6 +590,8 @@ fn wraps(id: &str) -> bool {
             | "file.automate.lensCorrection"
             | "file.export.layersToFiles"
             | "file.export.scales"
+            | "layer.batchRename"
+            | "layer.findReplaceNames"
             | "file.export.layerCompsToFiles"
             | "file.export.artboardsToFiles"
             | "file.export.artboardsToPdf"
@@ -1240,6 +1242,9 @@ fn front(app: &mut PhotocraftApp, id: &str, params: &Value) -> Option<Result<Val
                 json!({"format": ["png", "jpg", "psd", "tiff", "webp", "bmp"]}),
             )
         }
+        // Several layers named from a pattern; names found and replaced across the document.
+        "layer.batchRename" => dialog(app, json!({"pattern": "Layer {n}", "start": 1, "pad": 0}), json!({})),
+        "layer.findReplaceNames" => dialog(app, json!({"find": "", "replace": "", "matchCase": false, "scope": "all"}), json!({"scope": ["all", "selected"]})),
         // The document at 1×, 2×, … (FigCraft's export sizes): a folder, a name, the scales as text.
         "file.export.scales" => {
             let (_, _, name) = doc?;
